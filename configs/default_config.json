@@ -1,0 +1,10 @@
+{
+    "clock_frequency": "3200MHz",
+    "data_width": 64,
+    "burst_length": 8,
+    "cas_latency": 14,
+    "tRCD": 13.75,
+    "tRP": 13.75,
+    "tCAS": 13.75,
+    "tRC": 32.5
+}

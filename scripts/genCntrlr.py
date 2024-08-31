@@ -72,33 +72,111 @@ class MemoryController(Module):
         ]
 
     def command_decoder(self):
-        # Implementation of command decoder
-        return Module()
+        m = Module()
+        m.sync += [
+            If(self.rst,
+                self.cmd_decoded.eq(0),
+                self.address.eq(0)
+            ).Else(
+                self.address.eq(self.addr),
+                If(self.mem_read,
+                    self.cmd_decoded.eq(2)
+                ).Elif(self.mem_write,
+                    self.cmd_decoded.eq(3)
+                ).Else(
+                    self.cmd_decoded.eq(0)
+                )
+            )
+        ]
+        return m
 
     def timing_controller(self):
-        # Implementation of timing controller
-        return Module()
+        m = Module()
+        m.sync += [
+            If(self.rst,
+                self.timer.eq(0),
+                self.state.eq(0),
+                self.ready.eq(0)
+            ).Else(
+                Case(self.state, {
+                    0: If(self.cmd_decoded != 0,
+                          self.state.eq(1),
+                          self.timer.eq(0),
+                          self.ready.eq(0)),
+                    1: If(self.timer >= self.cas_latency,
+                          self.state.eq(2),
+                          self.ready.eq(1)
+                       ).Else(
+                          self.timer.eq(self.timer + 1)
+                       ),
+                    2: self.state.eq(0)
+                })
+            )
+        ]
+        return m
 
     def data_buffer(self):
-        # Implementation of data buffer
-        return Module()
+        m = Module()
+        m.sync += [
+            If(self.rst,
+                self.buffer_index.eq(0)
+            ).Elif(self.ready,
+                If(self.mem_write,
+                    self.buffer[self.buffer_index].eq(self.data_in),
+                    self.buffer_index.eq((self.buffer_index + 1) % self.burst_length)
+                ).Elif(self.mem_read,
+                    self.data_out.eq(self.buffer[self.buffer_index]),
+                    self.buffer_index.eq((self.buffer_index + 1) % self.burst_length)
+                )
+            )
+        ]
+        return m
 
     def power_management(self):
-        # Implementation of power management
-        return Module()
+        m = Module()
+        m.sync += [
+            If(self.rst,
+                self.power_state.eq(0)
+            ).Else(
+                Case(self.power_state, {
+                    0: If(self.cmd_decoded == 0,
+                          self.power_state.eq(1)),
+                    1: If(self.cmd_decoded != 0,
+                          self.power_state.eq(0))
+                })
+            )
+        ]
+        return m
 
     def memory_operations(self):
-        # Implementation of memory operations
-        return Module()
+        m = Module()
+        m.sync += [
+            If(self.rst,
+                # Reset memory operations
+            ).Elif(self.ready,
+                If(self.mem_read,
+                    self.buffer[self.buffer_index].eq(self.mem_array[self.address])
+                ).Elif(self.mem_write,
+                    self.mem_array[self.address].eq(self.buffer[self.buffer_index])
+                )
+            )
+        ]
+        return m
 
 def generate_verilog(config):
     mem_ctrl = MemoryController(config)
-    verilog_code = verilog.convert(mem_ctrl, ios={mem_ctrl.clk, mem_ctrl.rst, mem_ctrl.addr, 
-                                                  mem_ctrl.data_in, mem_ctrl.data_out, 
-                                                  mem_ctrl.mem_write, mem_ctrl.mem_read, 
-                                                  mem_ctrl.ready})
+    verilog_output = verilog.convert(mem_ctrl, ios={mem_ctrl.clk, mem_ctrl.rst, mem_ctrl.addr, 
+                                                    mem_ctrl.data_in, mem_ctrl.data_out, 
+                                                    mem_ctrl.mem_write, mem_ctrl.mem_read, 
+                                                    mem_ctrl.ready})
+    
     with open('rtl/DDR5_Memory_Controller.v', 'w') as file:
-        file.write(verilog_code)
+        for line in verilog_output.main_source:
+            file.write(line)
+        for filename, content in verilog_output.additional_sources.items():
+            with open(f'rtl/{filename}', 'w') as additional_file:
+                for line in content:
+                    additional_file.write(line)
 
 def main():
     config_path = 'configs/default_config.json'

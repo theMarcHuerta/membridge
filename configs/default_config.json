@@ -1,8 +1,10 @@
 {
-    "clock_frequency": "3200MHz",
     "data_width": 64,
     "burst_length": 8,
-    "cas_latency": 14,
+    "min_clock_frequency": 1600,
+    "max_clock_frequency": 4000,
+    "min_cas_latency": 10,
+    "max_cas_latency": 20,
     "tRCD": 13.75,
     "tRP": 13.75,
     "tCAS": 13.75,

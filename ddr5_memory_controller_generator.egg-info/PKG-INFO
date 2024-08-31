@@ -1,0 +1,55 @@
+Metadata-Version: 2.1
+Name: ddr5-memory-controller-generator
+Version: 0.1.0
+Summary: A DDR5 Memory Controller Generator
+Home-page: https://github.com/yourusername/ddr5_memory_controller_generator
+Author: Your Name
+Author-email: your.email@example.com
+License: UNKNOWN
+Description: # DDR5 Memory Controller Generator
+        
+        This project implements a configurable DDR5 memory controller generator. It allows users to specify DDR5 memory parameters through a JSON configuration file and generates a corresponding SystemVerilog implementation of the memory controller.
+        
+        ## Project Structure
+        
+        - `rtl/`: Contains SystemVerilog files for the memory controller and its submodules
+        - `tb/`: Contains the testbench for verifying the memory controller
+        - `scripts/`: Contains the Python script for generating the controller from JSON config
+        - `configs/`: Contains JSON configuration files
+        
+        ## Usage
+        
+        1. Edit the JSON configuration file in the `configs/` directory to specify your DDR5 memory parameters.
+        2. Run the generator script:
+           ```
+           python scripts/generate_controller.py
+           ```
+        3. The generated SystemVerilog files will be placed in the `rtl/` directory.
+        4. Use the testbench in `tb/` to verify the generated controller.
+        
+        ## Files Description
+        
+        - `DDR5_Memory_Controller.sv`: Top-level memory controller module
+        - `MC_CommandDecoder.sv`: Decodes incoming commands
+        - `MC_TimingController.sv`: Manages DDR5 timing constraints
+        - `MC_DataBuffer.sv`: Handles data buffering and transfer
+        - `MC_PowerManagement.sv`: Implements power management features
+        - `MC_ConfigInterface.sv`: Provides runtime configuration interface
+        - `DDR5_Memory_Controller_TB.sv`: Testbench for the memory controller
+        - `generate_controller.py`: Script to generate controller from JSON config
+        - `default_config.json`: Default configuration file
+        
+        ## Requirements
+        
+        - Python 3.6+
+        - SystemVerilog compatible simulator (e.g., ModelSim, VCS, Xcelium)
+        
+        ## Contributing
+        
+        [Add contribution guidelines here]
+        
+        ## License
+        
+        [Add license information here]
+Platform: UNKNOWN
+Description-Content-Type: text/markdown

@@ -1,0 +1,8 @@
+README.md
+setup.py
+ddr5_memory_controller_generator.egg-info/PKG-INFO
+ddr5_memory_controller_generator.egg-info/SOURCES.txt
+ddr5_memory_controller_generator.egg-info/dependency_links.txt
+ddr5_memory_controller_generator.egg-info/entry_points.txt
+ddr5_memory_controller_generator.egg-info/requires.txt
+ddr5_memory_controller_generator.egg-info/top_level.txt

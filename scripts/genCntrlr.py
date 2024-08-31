@@ -1,4 +1,5 @@
 import json
+import os
 from migen import *
 from migen.fhdl import verilog
 from pulp import *
@@ -123,10 +124,18 @@ class MemoryController(Module):
             ).Elif(self.ready,
                 If(self.mem_write,
                     self.buffer[self.buffer_index].eq(self.data_in),
-                    self.buffer_index.eq((self.buffer_index + 1) % self.burst_length)
+                    If(self.buffer_index == self.burst_length - 1,
+                        self.buffer_index.eq(0)
+                    ).Else(
+                        self.buffer_index.eq(self.buffer_index + 1)
+                    )
                 ).Elif(self.mem_read,
                     self.data_out.eq(self.buffer[self.buffer_index]),
-                    self.buffer_index.eq((self.buffer_index + 1) % self.burst_length)
+                    If(self.buffer_index == self.burst_length - 1,
+                        self.buffer_index.eq(0)
+                    ).Else(
+                        self.buffer_index.eq(self.buffer_index + 1)
+                    )
                 )
             )
         ]
@@ -139,7 +148,7 @@ class MemoryController(Module):
                 self.power_state.eq(0)
             ).Else(
                 Case(self.power_state, {
-                    0: If(self.cmd_decoded == 0,
+                     0: If(self.cmd_decoded == 0,
                           self.power_state.eq(1)),
                     1: If(self.cmd_decoded != 0,
                           self.power_state.eq(0))
@@ -164,6 +173,9 @@ class MemoryController(Module):
         return m
 
 def generate_verilog(config):
+    # Create the rtl directory if it doesn't exist
+    os.makedirs('rtl', exist_ok=True)
+
     mem_ctrl = MemoryController(config)
     verilog_output = verilog.convert(mem_ctrl, ios={mem_ctrl.clk, mem_ctrl.rst, mem_ctrl.addr, 
                                                     mem_ctrl.data_in, mem_ctrl.data_out, 
@@ -171,26 +183,36 @@ def generate_verilog(config):
                                                     mem_ctrl.ready})
     
     with open('rtl/DDR5_Memory_Controller.v', 'w') as file:
-        for line in verilog_output.main_source:
-            file.write(line)
-        for filename, content in verilog_output.additional_sources.items():
-            with open(f'rtl/{filename}', 'w') as additional_file:
-                for line in content:
-                    additional_file.write(line)
+        file.write(verilog_output.main_source)
+
+    # If there are any additional sources, they will be in verilog_output.ns
+    for name in dir(verilog_output.ns):
+        if not name.startswith('__'):
+            content = getattr(verilog_output.ns, name)
+            if isinstance(content, str):
+                with open(f'rtl/{name}.v', 'w') as additional_file:
+                    additional_file.write(content)
+
+    print("Verilog files generated successfully.")
 
 def main():
-    config_path = 'configs/default_config.json'
-    config = read_config(config_path)
-    
-    optimized_params = optimize_parameters(config)
-    config.update(optimized_params)
+    try:
+        config_path = 'configs/default_config.json'
+        config = read_config(config_path)
+        
+        optimized_params = optimize_parameters(config)
+        config.update(optimized_params)
 
-    print("Optimized parameters:")
-    print(f"Clock Frequency: {config['clock_frequency']} MHz")
-    print(f"CAS Latency: {config['cas_latency']}")
+        print("Optimized parameters:")
+        print(f"Clock Frequency: {config['clock_frequency']} MHz")
+        print(f"CAS Latency: {config['cas_latency']}")
 
-    generate_verilog(config)
-    print("DDR5 Memory Controller generated successfully.")
+        generate_verilog(config)
+        print("DDR5 Memory Controller generated successfully.")
+    except Exception as e:
+        print(f"An error occurred: {str(e)}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
     main()

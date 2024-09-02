@@ -5,11 +5,17 @@ from migen.fhdl import verilog
 from pulp import *
 from migen.genlib.fifo import SyncFIFO
 from migen.genlib.cdc import MultiReg
+from migen.sim import run_simulation
 
 # Function to read configuration from a JSON file
 def read_config(file_path):
-    with open(file_path, 'r') as file:
-        return json.load(file)  # Load and return the JSON configuration
+    try:
+        with open(file_path, 'r') as file:
+            return json.load(file)
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Configuration file not found: {file_path}")
+    except json.JSONDecodeError:
+        raise json.JSONDecodeError(f"Invalid JSON in configuration file: {file_path}")
 
 # Function to optimize memory controller parameters using linear programming
 def optimize_parameters(config):
@@ -38,6 +44,194 @@ def optimize_parameters(config):
         'cas_latency': int(value(cas_latency))
     }
 
+class CommandDecoder(Module):
+    def __init__(self):
+        self.rst = Signal()
+        self.addr = Signal(32)
+        self.mem_read = Signal()
+        self.mem_write = Signal()
+        self.cmd_decoded = Signal(4)
+        self.address = Signal(32)
+
+    def elaborate(self, platform):
+        m = Module()
+        m.sync += [
+            If(self.rst,  # Reset condition
+                self.cmd_decoded.eq(0),  # Reset command decoded signal
+                self.address.eq(0)  # Reset address signal
+            ).Else(
+                self.address.eq(self.addr),  # Set internal address
+                If(self.mem_read,  # If read command
+                    self.cmd_decoded.eq(2)  # Decode as read command
+                ).Elif(self.mem_write,  # If write command
+                    self.cmd_decoded.eq(3)  # Decode as write command
+                ).Else(
+                    self.cmd_decoded.eq(0)  # Default to no command
+                )
+            )
+        ]
+        return m
+
+class TimingController(Module):
+    def __init__(self, cas_latency, tRCD, tRP, tRAS):
+        self.rst = Signal()
+        self.cmd_decoded = Signal(4)
+        self.timer = Signal(32)
+        self.state = Signal(3)
+        self.ready = Signal()
+        self.cas_latency = cas_latency
+        self.tRCD = tRCD
+        self.tRP = tRP
+        self.tRAS = tRAS
+
+    def elaborate(self, platform):
+        m = Module()
+        m.sync += [
+            If(self.rst,  # Reset condition
+                self.timer.eq(0),  # Reset timer
+                self.state.eq(0),  # Reset state
+                self.ready.eq(0)  # Reset ready signal
+            ).Else(
+                Case(self.state, {
+                    0: If(self.cmd_decoded != 0,  # If command is decoded
+                          self.state.eq(1),  # Move to next state
+                          self.timer.eq(0),  # Reset timer
+                          self.ready.eq(0)),  # Clear ready signal
+                    1: If(self.timer >= self.cas_latency,  # If CAS latency is met
+                          self.state.eq(2),  # Move to next state
+                          self.ready.eq(1)  # Set ready signal
+                       ).Else(
+                          self.timer.eq(self.timer + 1)  # Increment timer
+                       ),
+                    2: If(self.timer >= self.tRCD,  # If tRCD is met
+                          self.state.eq(3)  # Move to next state
+                       ).Else(
+                          self.timer.eq(self.timer + 1)  # Increment timer
+                       ),
+                    3: If(self.timer >= self.tRP,  # If tRP is met
+                          self.state.eq(4)  # Move to next state
+                       ).Else(
+                          self.timer.eq(self.timer + 1)  # Increment timer
+                       ),
+                    4: If(self.timer >= self.tRAS,  # If tRAS is met
+                          self.state.eq(0)  # Reset to initial state
+                       ).Else(
+                          self.timer.eq(self.timer + 1)  # Increment timer
+                       ),
+                    "default": self.state.eq(0)  # Default case: reset to initial state
+                })
+            )
+        ]
+        return m
+
+class DataBuffer(Module):
+    def __init__(self, data_width, burst_length):
+        self.rst = Signal()
+        self.ready = Signal()
+        self.mem_write = Signal()
+        self.mem_read = Signal()
+        self.data_in = Signal(data_width)
+        self.data_out = Signal(data_width)
+        self.buffer_index = Signal(max=burst_length)
+        
+        self.data_in_fifo = SyncFIFO(width=data_width, depth=16)
+        self.data_out_fifo = SyncFIFO(width=data_width, depth=16)
+
+    def elaborate(self, platform):
+        m = Module()
+        m.submodules.data_in_fifo = self.data_in_fifo
+        m.submodules.data_out_fifo = self.data_out_fifo
+
+        m.d.sync += [
+            If(self.rst,  # Reset condition
+                self.buffer_index.eq(0)  # Reset buffer index
+            ).Elif(self.ready,  # If ready signal is high
+                If(self.mem_write,  # If write operation
+                    self.data_in_fifo.din.eq(self.data_in),  # Load data into input FIFO
+                    self.data_in_fifo.we.eq(1),  # Write enable for input FIFO
+                    If(self.buffer_index == self.burst_length - 1,  # If buffer is full
+                        self.buffer_index.eq(0)  # Reset buffer index
+                    ).Else(
+                        self.buffer_index.eq(self.buffer_index + 1)  # Increment buffer index
+                    )
+                ).Elif(self.mem_read,  # If read operation
+                    self.data_out.eq(self.data_out_fifo.dout),  # Output data from FIFO
+                    self.data_out_fifo.re.eq(1),  # Read enable for output FIFO
+                    If(self.buffer_index == self.burst_length - 1,  # If buffer is full
+                        self.buffer_index.eq(0)  # Reset buffer index
+                    ).Else(
+                        self.buffer_index.eq(self.buffer_index + 1)  # Increment buffer index
+                    )
+                )
+            )
+        ]
+        return m
+
+class PowerManagement(Module):
+    def __init__(self):
+        self.rst = Signal()
+        self.cmd_decoded = Signal(4)
+        self.power_state = Signal(2)
+
+    def elaborate(self, platform):
+        m = Module()
+        m.d.sync += [
+            If(self.rst,  # Reset condition
+                self.power_state.eq(0)  # Reset power state
+            ).Else(
+                Case(self.power_state, {  # State machine for power management
+                     0: If(self.cmd_decoded == 0,  # If no command
+                          self.power_state.eq(1)),  # Move to low power state
+                    1: If(self.cmd_decoded != 0,  # If command detected
+                          self.power_state.eq(0))  # Exit low power state
+                })
+            )
+        ]
+        return m
+
+from abc import ABC, abstractmethod
+
+class MemoryStrategy(ABC):
+    @abstractmethod
+    def get_max_clock_frequency(self):
+        pass
+
+    @abstractmethod
+    def get_max_cas_latency(self):
+        pass
+
+    @abstractmethod
+    def get_timing_parameters(self):
+        pass
+
+class DDR4Strategy(MemoryStrategy):
+    def get_max_clock_frequency(self):
+        return 3200  # MHz
+
+    def get_max_cas_latency(self):
+        return 20
+
+    def get_timing_parameters(self):
+        return {
+            'tRCD': 14,
+            'tRP': 14,
+            'tRAS': 33
+        }
+
+class DDR5Strategy(MemoryStrategy):
+    def get_max_clock_frequency(self):
+        return 6400  # MHz
+
+    def get_max_cas_latency(self):
+        return 36
+
+    def get_timing_parameters(self):
+        return {
+            'tRCD': 18,
+            'tRP': 18,
+            'tRAS': 32
+        }
+
 # MemoryController class that defines the behavior and structure of the memory controller
 class MemoryController(Module):
     def __init__(self, config):
@@ -46,6 +240,22 @@ class MemoryController(Module):
         self.cas_latency = config['cas_latency']
         self.data_width = config['data_width']
         self.burst_length = config['burst_length']
+        self.memory_type = config.get('memory_type', 'DDR5')  # Default to DDR5
+
+        if self.memory_type == 'DDR4':
+            self.memory_strategy = DDR4Strategy()
+        elif self.memory_type == 'DDR5':
+            self.memory_strategy = DDR5Strategy()
+        else:
+            raise ValueError(f"Unsupported memory type: {self.memory_type}")
+
+        self.max_clock_frequency = self.memory_strategy.get_max_clock_frequency()
+        self.max_cas_latency = self.memory_strategy.get_max_cas_latency()
+        
+        timing_params = self.memory_strategy.get_timing_parameters()
+        self.tRCD = timing_params['tRCD']
+        self.tRP = timing_params['tRP']
+        self.tRAS = timing_params['tRAS']
 
         # Define input signals
         self.clk = Signal()  # Clock signal
@@ -183,110 +393,58 @@ class MemoryController(Module):
         self.req = Signal(4)  # Request signal for 4 requestors
         self.grant = Signal(4)  # Grant signal for 4 requestors
 
-    # Method to decode memory commands
-    def command_decoder(self):
-        m = Module()
-        m.sync += [
-            If(self.rst,  # Reset condition
-                self.cmd_decoded.eq(0),  # Reset command decoded signal
-                self.address.eq(0)  # Reset address signal
-            ).Else(
-                self.address.eq(self.addr),  # Set internal address
-                If(self.mem_read,  # If read command
-                    self.cmd_decoded.eq(2)  # Decode as read command
-                ).Elif(self.mem_write,  # If write command
-                    self.cmd_decoded.eq(3)  # Decode as write command
-                ).Else(
-                    self.cmd_decoded.eq(0)  # Default to no command
-                )
-            )
-        ]
-        return m
+        # Adjust parameters based on memory type
+        if self.memory_type == 'DDR4':
+            self.max_clock_frequency = 3200  # MHz
+            self.max_cas_latency = 20
+        elif self.memory_type == 'DDR5':
+            self.max_clock_frequency = 6400  # MHz
+            self.max_cas_latency = 36
+        else:
+            raise ValueError(f"Unsupported memory type: {self.memory_type}")
 
-    # Method for managing timing of memory operations
+        # Adjust timing parameters based on memory type
+        self.adjust_timing_parameters()
+
+    def command_decoder(self):
+        return CommandDecoder()
+
     def timing_controller(self):
-        m = Module()
-        m.sync += [
-            If(self.rst,  # Reset condition
-                self.timer.eq(0),  # Reset timer
-                self.state.eq(0),  # Reset state
-                self.ready.eq(0)  # Reset ready signal
-            ).Else(
-                Case(self.state, {  # State machine for timing control
-                    0: If(self.cmd_decoded != 0,  # If command is decoded
-                          self.state.eq(1),  # Move to next state
-                          self.timer.eq(0),  # Reset timer
-                          self.ready.eq(0)),  # Clear ready signal
-                    1: If(self.timer >= self.cas_latency,  # If CAS latency is met
-                          self.state.eq(2),  # Move to next state
-                          self.ready.eq(1)  # Set ready signal
-                       ).Else(
-                          self.timer.eq(self.timer + 1)  # Increment timer
-                       ),
-                    2: If(self.timer >= self.tRCD,  # If tRCD is met
-                          self.state.eq(3)  # Move to next state
-                       ).Else(
-                          self.timer.eq(self.timer + 1)  # Increment timer
-                       ),
-                    3: If(self.timer >= self.tRP,  # If tRP is met
-                          self.state.eq(4)  # Move to next state
-                       ).Else(
-                          self.timer.eq(self.timer + 1)  # Increment timer
-                       ),
-                    4: If(self.timer >= self.tRAS,  # If tRAS is met
-                          self.state.eq(0)  # Reset to initial state
-                       ).Else(
-                          self.timer.eq(self.timer + 1)  # Increment timer
-                       )
-                })
-            )
-        ]
-        return m
+        return TimingController(
+            cas_latency=self.cas_latency,
+            tRCD=self.tRCD,
+            tRP=self.tRP,
+            tRAS=self.tRAS
+        )
+
+    def adjust_timing_parameters(self):
+        if self.memory_type == 'DDR4':
+            self.tRCD = 14  # Example value for DDR4
+            self.tRP = 14
+            self.tRAS = 33
+        elif self.memory_type == 'DDR5':
+            self.tRCD = 18  # Example value for DDR5
+            self.tRP = 18
+            self.tRAS = 32
+        
+        # Update timing controller with new parameters
+        self.submodules.timing_controller = TimingController(
+            cas_latency=self.cas_latency,
+            tRCD=self.tRCD,
+            tRP=self.tRP,
+            tRAS=self.tRAS
+        )
 
     # Method to manage data buffering
     def data_buffer(self):
-        m = Module()
-        m.sync += [
-            If(self.rst,  # Reset condition
-                self.buffer_index.eq(0)  # Reset buffer index
-            ).Elif(self.ready,  # If ready signal is high
-                If(self.mem_write,  # If write operation
-                    self.data_in_fifo.din.eq(self.data_in),  # Load data into input FIFO
-                    self.data_in_fifo.we.eq(1),  # Write enable for input FIFO
-                    If(self.buffer_index == self.burst_length - 1,  # If buffer is full
-                        self.buffer_index.eq(0)  # Reset buffer index
-                    ).Else(
-                        self.buffer_index.eq(self.buffer_index + 1)  # Increment buffer index
-                    )
-                ).Elif(self.mem_read,  # If read operation
-                    self.data_out.eq(self.data_out_fifo.dout),  # Output data from FIFO
-                    self.data_out_fifo.re.eq(1),  # Read enable for output FIFO
-                    If(self.buffer_index == self.burst_length - 1,  # If buffer is full
-                        self.buffer_index.eq(0)  # Reset buffer index
-                    ).Else(
-                        self.buffer_index.eq(self.buffer_index + 1)  # Increment buffer index
-                    )
-                )
-            )
-        ]
-        return m
+        return DataBuffer(
+            data_width=self.data_width,
+            burst_length=self.burst_length
+        )
 
     # Method for power management
     def power_management(self):
-        m = Module()
-        m.sync += [
-            If(self.rst,  # Reset condition
-                self.power_state.eq(0)  # Reset power state
-            ).Else(
-                Case(self.power_state, {  # State machine for power management
-                     0: If(self.cmd_decoded == 0,  # If no command
-                          self.power_state.eq(1)),  # Move to low power state
-                    1: If(self.cmd_decoded != 0,  # If command detected
-                          self.power_state.eq(0))  # Exit low power state
-                })
-            )
-        ]
-        return m
+        return PowerManagement()
 
     # Method for handling memory read/write operations
     def memory_operations(self):
@@ -687,6 +845,36 @@ class MemoryController(Module):
         ]
         return m
 
+    def elaborate(self, platform):
+        m = Module()
+        m.submodules.command_decoder = self.command_decoder
+        m.submodules.timing_controller = self.timing_controller
+        m.submodules.data_buffer = self.data_buffer
+        m.submodules.power_management = self.power_management
+
+        # Connect signals between modules
+        m.d.comb += [
+            self.command_decoder.rst.eq(self.rst),
+            self.command_decoder.addr.eq(self.addr),
+            self.command_decoder.mem_read.eq(self.mem_read),
+            self.command_decoder.mem_write.eq(self.mem_write),
+            self.timing_controller.rst.eq(self.rst),
+            self.timing_controller.cmd_decoded.eq(self.command_decoder.cmd_decoded),
+            self.data_buffer.rst.eq(self.rst),
+            self.data_buffer.ready.eq(self.timing_controller.ready),
+            self.data_buffer.mem_read.eq(self.mem_read),
+            self.data_buffer.mem_write.eq(self.mem_write),
+            self.data_buffer.data_in.eq(self.data_in),
+            self.data_out.eq(self.data_buffer.data_out),
+            self.power_management.rst.eq(self.rst),
+            self.power_management.cmd_decoded.eq(self.command_decoder.cmd_decoded),
+            self.ready.eq(self.timing_controller.ready)
+        ]
+
+        # Rest of the elaborate method...
+
+        return m
+
 # Function to generate Verilog code from the MemoryController module
 def generate_verilog(config):
     # Create the rtl directory if it doesn't exist
@@ -712,25 +900,85 @@ def generate_verilog(config):
 
     print("Verilog files generated successfully.")
 
-# Main function to execute the memory controller design flow
+def validate_config(config):
+    required_fields = ['clock_frequency', 'cas_latency', 'data_width', 'burst_length', 'memory_type']
+    for field in required_fields:
+        if field not in config:
+            raise ValueError(f"Missing required configuration field: {field}")
+    
+    if config['memory_type'] not in ['DDR4', 'DDR5']:
+        raise ValueError(f"Unsupported memory type: {config['memory_type']}")
+    
+    if config['clock_frequency'] <= 0:
+        raise ValueError("Clock frequency must be positive")
+    
+    if config['cas_latency'] <= 0:
+        raise ValueError("CAS latency must be positive")
+    
+    if config['data_width'] not in [8, 16, 32, 64]:
+        raise ValueError("Data width must be 8, 16, 32, or 64 bits")
+    
+    if config['burst_length'] not in [4, 8, 16]:
+        raise ValueError("Burst length must be 4, 8, or 16")
+
 def main():
     try:
-        config_path = 'configs/default_config.json'  # Path to default configuration file
-        config = read_config(config_path)  # Read configuration
+        config_path = 'configs/default_config.json'
+        config = read_config(config_path)
+        
+        # Validate configuration
+        validate_config(config)
 
-        optimized_params = optimize_parameters(config)  # Optimize parameters
-        config.update(optimized_params)  # Update config with optimized parameters
+        optimized_params = optimize_parameters(config)
+        config.update(optimized_params)
 
         print("Optimized parameters:")
-        print(f"Clock Frequency: {config['clock_frequency']} MHz")  # Output optimized clock frequency
-        print(f"CAS Latency: {config['cas_latency']}")  # Output optimized CAS latency
+        print(f"Clock Frequency: {config['clock_frequency']} MHz")
+        print(f"CAS Latency: {config['cas_latency']}")
+        print(f"Memory Type: {config['memory_type']}")
 
-        generate_verilog(config)  # Generate Verilog code
-        print("DDR5 Memory Controller generated successfully.")
+        generate_verilog(config)
+        print("Memory Controller generated successfully.")
+    except FileNotFoundError:
+        print(f"Error: Configuration file not found at {config_path}")
+    except json.JSONDecodeError:
+        print(f"Error: Invalid JSON in configuration file {config_path}")
+    except ValueError as ve:
+        print(f"Error in configuration: {str(ve)}")
     except Exception as e:
-        print(f"An error occurred: {str(e)}")  # Print error message
+        print(f"An unexpected error occurred: {str(e)}")
         import traceback
-        traceback.print_exc()  # Print stack trace
+        traceback.print_exc()
+
+# Update the read_config function to handle file-related errors
+def read_config(file_path):
+    try:
+        config_path = 'configs/default_config.json'
+        config = read_config(config_path)
+        
+        # Validate configuration
+        validate_config(config)
+
+        optimized_params = optimize_parameters(config)
+        config.update(optimized_params)
+
+        print("Optimized parameters:")
+        print(f"Clock Frequency: {config['clock_frequency']} MHz")
+        print(f"CAS Latency: {config['cas_latency']}")
+        print(f"Memory Type: {config['memory_type']}")
+
+        generate_verilog(config)
+        print("Memory Controller generated successfully.")
+    except FileNotFoundError:
+        print(f"Error: Configuration file not found at {config_path}")
+    except json.JSONDecodeError:
+        print(f"Error: Invalid JSON in configuration file {config_path}")
+    except ValueError as ve:
+        print(f"Error in configuration: {str(ve)}")
+    except Exception as e:
+        print(f"An unexpected error occurred: {str(e)}")
+        import traceback
+        traceback.print_exc()
 
 # Entry point of the script
 if __name__ == "__main__":

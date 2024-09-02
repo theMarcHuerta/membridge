@@ -1,6 +1,10 @@
 import json
 import os
 from migen import *
+from scripts.commandDecoder import CommandDecoder
+from scripts.timingCntrlr import TimingController
+from scripts.dataBuffer import DataBuffer
+from scripts.powerManage import PowerManagement
 from migen.fhdl import verilog
 from pulp import *
 from migen.genlib.fifo import SyncFIFO
@@ -44,218 +48,103 @@ def optimize_parameters(config):
         'cas_latency': int(value(cas_latency))
     }
 
-class CommandDecoder(Module):
-    def __init__(self):
-        self.rst = Signal()
-        self.addr = Signal(32)
-        self.mem_read = Signal()
-        self.mem_write = Signal()
-        self.cmd_decoded = Signal(4)
-        self.address = Signal(32)
-
-    def elaborate(self, platform):
-        m = Module()
-        m.sync += [
-            If(self.rst,  # Reset condition
-                self.cmd_decoded.eq(0),  # Reset command decoded signal
-                self.address.eq(0)  # Reset address signal
-            ).Else(
-                self.address.eq(self.addr),  # Set internal address
-                If(self.mem_read,  # If read command
-                    self.cmd_decoded.eq(2)  # Decode as read command
-                ).Elif(self.mem_write,  # If write command
-                    self.cmd_decoded.eq(3)  # Decode as write command
-                ).Else(
-                    self.cmd_decoded.eq(0)  # Default to no command
-                )
-            )
-        ]
-        return m
-
-class TimingController(Module):
-    def __init__(self, cas_latency, tRCD, tRP, tRAS):
-        self.rst = Signal()
-        self.cmd_decoded = Signal(4)
-        self.timer = Signal(32)
-        self.state = Signal(3)
-        self.ready = Signal()
-        self.cas_latency = cas_latency
-        self.tRCD = tRCD
-        self.tRP = tRP
-        self.tRAS = tRAS
-
-    def elaborate(self, platform):
-        m = Module()
-        m.sync += [
-            If(self.rst,  # Reset condition
-                self.timer.eq(0),  # Reset timer
-                self.state.eq(0),  # Reset state
-                self.ready.eq(0)  # Reset ready signal
-            ).Else(
-                Case(self.state, {
-                    0: If(self.cmd_decoded != 0,  # If command is decoded
-                          self.state.eq(1),  # Move to next state
-                          self.timer.eq(0),  # Reset timer
-                          self.ready.eq(0)),  # Clear ready signal
-                    1: If(self.timer >= self.cas_latency,  # If CAS latency is met
-                          self.state.eq(2),  # Move to next state
-                          self.ready.eq(1)  # Set ready signal
-                       ).Else(
-                          self.timer.eq(self.timer + 1)  # Increment timer
-                       ),
-                    2: If(self.timer >= self.tRCD,  # If tRCD is met
-                          self.state.eq(3)  # Move to next state
-                       ).Else(
-                          self.timer.eq(self.timer + 1)  # Increment timer
-                       ),
-                    3: If(self.timer >= self.tRP,  # If tRP is met
-                          self.state.eq(4)  # Move to next state
-                       ).Else(
-                          self.timer.eq(self.timer + 1)  # Increment timer
-                       ),
-                    4: If(self.timer >= self.tRAS,  # If tRAS is met
-                          self.state.eq(0)  # Reset to initial state
-                       ).Else(
-                          self.timer.eq(self.timer + 1)  # Increment timer
-                       ),
-                    "default": self.state.eq(0)  # Default case: reset to initial state
-                })
-            )
-        ]
-        return m
-
-class DataBuffer(Module):
-    def __init__(self, data_width, burst_length):
-        self.rst = Signal()
-        self.ready = Signal()
-        self.mem_write = Signal()
-        self.mem_read = Signal()
-        self.data_in = Signal(data_width)
-        self.data_out = Signal(data_width)
-        self.buffer_index = Signal(max=burst_length)
-        
-        self.data_in_fifo = SyncFIFO(width=data_width, depth=16)
-        self.data_out_fifo = SyncFIFO(width=data_width, depth=16)
-
-    def elaborate(self, platform):
-        m = Module()
-        m.submodules.data_in_fifo = self.data_in_fifo
-        m.submodules.data_out_fifo = self.data_out_fifo
-
-        m.d.sync += [
-            If(self.rst,  # Reset condition
-                self.buffer_index.eq(0)  # Reset buffer index
-            ).Elif(self.ready,  # If ready signal is high
-                If(self.mem_write,  # If write operation
-                    self.data_in_fifo.din.eq(self.data_in),  # Load data into input FIFO
-                    self.data_in_fifo.we.eq(1),  # Write enable for input FIFO
-                    If(self.buffer_index == self.burst_length - 1,  # If buffer is full
-                        self.buffer_index.eq(0)  # Reset buffer index
-                    ).Else(
-                        self.buffer_index.eq(self.buffer_index + 1)  # Increment buffer index
-                    )
-                ).Elif(self.mem_read,  # If read operation
-                    self.data_out.eq(self.data_out_fifo.dout),  # Output data from FIFO
-                    self.data_out_fifo.re.eq(1),  # Read enable for output FIFO
-                    If(self.buffer_index == self.burst_length - 1,  # If buffer is full
-                        self.buffer_index.eq(0)  # Reset buffer index
-                    ).Else(
-                        self.buffer_index.eq(self.buffer_index + 1)  # Increment buffer index
-                    )
-                )
-            )
-        ]
-        return m
-
-class PowerManagement(Module):
-    def __init__(self):
-        self.rst = Signal()
-        self.cmd_decoded = Signal(4)
-        self.power_state = Signal(2)
-
-    def elaborate(self, platform):
-        m = Module()
-        m.d.sync += [
-            If(self.rst,  # Reset condition
-                self.power_state.eq(0)  # Reset power state
-            ).Else(
-                Case(self.power_state, {  # State machine for power management
-                     0: If(self.cmd_decoded == 0,  # If no command
-                          self.power_state.eq(1)),  # Move to low power state
-                    1: If(self.cmd_decoded != 0,  # If command detected
-                          self.power_state.eq(0))  # Exit low power state
-                })
-            )
-        ]
-        return m
 
 from abc import ABC, abstractmethod
 
-class MemoryStrategy(ABC):
-    @abstractmethod
-    def get_max_clock_frequency(self):
-        pass
-
-    @abstractmethod
-    def get_max_cas_latency(self):
-        pass
-
+class MemoryType(ABC):
     @abstractmethod
     def get_timing_parameters(self):
         pass
 
-class DDR4Strategy(MemoryStrategy):
-    def get_max_clock_frequency(self):
-        return 3200  # MHz
+    @abstractmethod
+    def get_command_encoding(self):
+        pass
 
-    def get_max_cas_latency(self):
-        return 20
-
-    def get_timing_parameters(self):
-        return {
-            'tRCD': 14,
-            'tRP': 14,
-            'tRAS': 33
-        }
-
-class DDR5Strategy(MemoryStrategy):
-    def get_max_clock_frequency(self):
-        return 6400  # MHz
-
-    def get_max_cas_latency(self):
-        return 36
+class DDR5(MemoryType):
+    def __init__(self, clock_frequency, cas_latency):
+        self.clock_frequency = clock_frequency
+        self.cas_latency = cas_latency
 
     def get_timing_parameters(self):
         return {
             'tRCD': 18,
             'tRP': 18,
-            'tRAS': 32
+            'tRAS': 32,
+            'tRC': 50,
+            'tWR': 20,
         }
+
+    def get_command_encoding(self):
+        return {
+            'READ': 0b0101,
+            'WRITE': 0b0100,
+            'ACTIVATE': 0b0011,
+            'PRECHARGE': 0b0010,
+            'REFRESH': 0b0001,
+        }
+
+# Add more memory type classes as needed (e.g., DDR4, LPDDR4, etc.)
 
 # MemoryController class that defines the behavior and structure of the memory controller
 class MemoryController(Module):
     def __init__(self, config):
-        # Initialize memory controller parameters from config
+        required_params = ['clock_frequency', 'cas_latency', 'data_width', 'burst_length', 'memory_type']
+        for param in required_params:
+            if param not in config:
+                raise ValueError(f"Missing required parameter: {param}")
+            
+        self.submodules.command_decoder = CommandDecoder(command_encoding)
+        self.submodules.timing_controller = TimingController(
+            config['cas_latency'],
+            timing_params['tRCD'],
+            timing_params['tRP'],
+            timing_params['tRAS']
+        )
+        self.submodules.data_buffer = DataBuffer(config['data_width'], config['burst_length'])
+        self.submodules.power_management = PowerManagement()
+
+
         self.clock_frequency = config['clock_frequency']
         self.cas_latency = config['cas_latency']
         self.data_width = config['data_width']
         self.burst_length = config['burst_length']
-        self.memory_type = config.get('memory_type', 'DDR5')  # Default to DDR5
+        self.memory_type = config['memory_type']
 
-        if self.memory_type == 'DDR4':
-            self.memory_strategy = DDR4Strategy()
-        elif self.memory_type == 'DDR5':
-            self.memory_strategy = DDR5Strategy()
-        else:
+        # Validate parameter values
+        if self.clock_frequency <= 0:
+            raise ValueError("Clock frequency must be positive")
+        if self.cas_latency <= 0:
+            raise ValueError("CAS latency must be positive")
+        if self.data_width not in [8, 16, 32, 64]:
+            raise ValueError("Data width must be 8, 16, 32, or 64 bits")
+        if self.burst_length not in [4, 8, 16]:
+            raise ValueError("Burst length must be 4, 8, or 16")
+        if self.memory_type not in ['DDR5']:  # Add more supported types as needed
             raise ValueError(f"Unsupported memory type: {self.memory_type}")
 
-        self.max_clock_frequency = self.memory_strategy.get_max_clock_frequency()
-        self.max_cas_latency = self.memory_strategy.get_max_cas_latency()
-        
-        timing_params = self.memory_strategy.get_timing_parameters()
-        self.tRCD = timing_params['tRCD']
-        self.tRP = timing_params['tRP']
-        self.tRAS = timing_params['tRAS']
+        # Create the appropriate memory type object
+        try:
+            if self.memory_type == 'DDR5':
+                self.memory_type_obj = DDR5(self.clock_frequency, self.cas_latency)
+            else:
+                raise ValueError(f"Unsupported memory type: {self.memory_type}")
+        except Exception as e:
+            raise RuntimeError(f"Error creating memory type object: {str(e)}")
+
+        # Use memory type specific parameters
+        try:
+            timing_params = self.memory_type_obj.get_timing_parameters()
+            self.submodules.timing_controller = TimingController(
+                self.cas_latency,
+                timing_params['tRCD'],
+                timing_params['tRP'],
+                timing_params['tRAS']
+            )
+
+            command_encoding = self.memory_type_obj.get_command_encoding()
+            self.submodules.command_decoder = CommandDecoder(command_encoding)
+        except Exception as e:
+            raise RuntimeError(f"Error initializing controller components: {str(e)}")
 
         # Define input signals
         self.clk = Signal()  # Clock signal
@@ -393,42 +282,17 @@ class MemoryController(Module):
         self.req = Signal(4)  # Request signal for 4 requestors
         self.grant = Signal(4)  # Grant signal for 4 requestors
 
-        # Adjust parameters based on memory type
-        if self.memory_type == 'DDR4':
-            self.max_clock_frequency = 3200  # MHz
-            self.max_cas_latency = 20
-        elif self.memory_type == 'DDR5':
-            self.max_clock_frequency = 6400  # MHz
-            self.max_cas_latency = 36
-        else:
-            raise ValueError(f"Unsupported memory type: {self.memory_type}")
-
-        # Adjust timing parameters based on memory type
-        self.adjust_timing_parameters()
+        self.submodules.address_mapper = AddressMapper(
+            row_bits=16,  # Adjust these values based on your memory configuration
+            col_bits=10,
+            bank_bits=3
+        )
 
     def command_decoder(self):
         return CommandDecoder()
 
     def timing_controller(self):
         return TimingController(
-            cas_latency=self.cas_latency,
-            tRCD=self.tRCD,
-            tRP=self.tRP,
-            tRAS=self.tRAS
-        )
-
-    def adjust_timing_parameters(self):
-        if self.memory_type == 'DDR4':
-            self.tRCD = 14  # Example value for DDR4
-            self.tRP = 14
-            self.tRAS = 33
-        elif self.memory_type == 'DDR5':
-            self.tRCD = 18  # Example value for DDR5
-            self.tRP = 18
-            self.tRAS = 32
-        
-        # Update timing controller with new parameters
-        self.submodules.timing_controller = TimingController(
             cas_latency=self.cas_latency,
             tRCD=self.tRCD,
             tRP=self.tRP,
@@ -587,8 +451,7 @@ class MemoryController(Module):
                 self.calibration_done.eq(0)  # Clear calibration done signal
             ).Else(
                 If(calibration_counter < 50000,  # Example calibration duration
-                    calibration_counter.eq(calibration_counter + 1)  # Increment counter
-                ).Else(
+                    calibration_counter.eq(calibration_counter + 1                ).Else(
                     self.calibration_done.eq(1)  # Set calibration done signal
                 )
             )
@@ -869,6 +732,14 @@ class MemoryController(Module):
             self.power_management.rst.eq(self.rst),
             self.power_management.cmd_decoded.eq(self.command_decoder.cmd_decoded),
             self.ready.eq(self.timing_controller.ready)
+        ]
+
+        m.d.comb += [
+            self.address_mapper.addr_in.eq(self.addr),
+            # Use mapped addresses in other parts of the controller
+            self.some_module.row_addr.eq(self.address_mapper.row_addr),
+            self.some_module.col_addr.eq(self.address_mapper.col_addr),
+            self.some_module.bank_addr.eq(self.address_mapper.bank_addr),
         ]
 
         # Rest of the elaborate method...

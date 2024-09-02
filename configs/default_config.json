@@ -1,12 +1,14 @@
 {
+    "clock_frequency": 3200,
+    "cas_latency": 16,
     "data_width": 64,
     "burst_length": 8,
+    "memory_type": "DDR5",
     "min_clock_frequency": 1600,
     "max_clock_frequency": 4000,
     "min_cas_latency": 10,
     "max_cas_latency": 20,
-    "tRCD": 13.75,
-    "tRP": 13.75,
-    "tCAS": 13.75,
-    "tRC": 32.5
+    "tRCD": 18,
+    "tRP": 18,
+    "tRAS": 32
 }

@@ -5,6 +5,10 @@ from scripts.commandDecoder import CommandDecoder
 from scripts.timingCntrlr import TimingController
 from scripts.dataBuffer import DataBuffer
 from scripts.powerManage import PowerManagement
+from scripts.memoryOperations import MemoryOperations
+from scripts.addressMapping import AddressMapper
+from scripts.accessArbitration import AccessArbitration
+from scripts.clockDomainCrossing import ClockDomainCrossing
 from migen.fhdl import verilog
 from pulp import *
 from migen.genlib.fifo import SyncFIFO
@@ -30,7 +34,6 @@ def optimize_parameters(config):
     cas_latency = LpVariable("cas_latency", lowBound=config['min_cas_latency'], upBound=config['max_cas_latency'], cat='Integer')
 
     # Objective: Minimize CAS latency and maximize clock frequency
-    # Using a weighted sum of normalized values for objective function
     prob += 1000 * cas_latency * config['max_clock_frequency'] - clock_freq * config['max_cas_latency']
 
     # Constraints based on config bounds
@@ -47,7 +50,6 @@ def optimize_parameters(config):
         'clock_frequency': int(value(clock_freq)),
         'cas_latency': int(value(cas_latency))
     }
-
 
 from abc import ABC, abstractmethod
 
@@ -83,8 +85,6 @@ class DDR5(MemoryType):
             'REFRESH': 0b0001,
         }
 
-# Add more memory type classes as needed (e.g., DDR4, LPDDR4, etc.)
-
 # MemoryController class that defines the behavior and structure of the memory controller
 class MemoryController(Module):
     def __init__(self, config):
@@ -92,17 +92,6 @@ class MemoryController(Module):
         for param in required_params:
             if param not in config:
                 raise ValueError(f"Missing required parameter: {param}")
-            
-        self.submodules.command_decoder = CommandDecoder(command_encoding)
-        self.submodules.timing_controller = TimingController(
-            config['cas_latency'],
-            timing_params['tRCD'],
-            timing_params['tRP'],
-            timing_params['tRAS']
-        )
-        self.submodules.data_buffer = DataBuffer(config['data_width'], config['burst_length'])
-        self.submodules.power_management = PowerManagement()
-
 
         self.clock_frequency = config['clock_frequency']
         self.cas_latency = config['cas_latency']
@@ -134,17 +123,19 @@ class MemoryController(Module):
         # Use memory type specific parameters
         try:
             timing_params = self.memory_type_obj.get_timing_parameters()
+            command_encoding = self.memory_type_obj.get_command_encoding()
             self.submodules.timing_controller = TimingController(
                 self.cas_latency,
                 timing_params['tRCD'],
                 timing_params['tRP'],
                 timing_params['tRAS']
             )
-
-            command_encoding = self.memory_type_obj.get_command_encoding()
             self.submodules.command_decoder = CommandDecoder(command_encoding)
         except Exception as e:
             raise RuntimeError(f"Error initializing controller components: {str(e)}")
+
+        self.submodules.data_buffer = DataBuffer(config['data_width'], config['burst_length'])
+        self.submodules.power_management = PowerManagement()
 
         # Define input signals
         self.clk = Signal()  # Clock signal
@@ -239,38 +230,15 @@ class MemoryController(Module):
 
         # Adding submodules to the memory controller
         self.submodules += [
-            self.command_decoder(),
-            self.timing_controller(),
-            self.data_buffer(),
-            self.power_management(),
-            self.memory_operations(),
-            self.address_mapping(),
-            self.access_arbitration(),
-            self.ecc_logic(),
-            self.refresh_logic(),
-            self.data_width_conversion_logic(),
-            self.byte_enable_logic(),
-            self.clock_domain_crossing(),
-            self.power_up_initialization(),
-            self.mode_register_setup(),
-            self.calibration(),
-            self.low_power_modes(),
-            self.dynamic_power_control(),
-            self.command_scheduler(),
-            self.lookahead_buffers(),
-            self.jtag_interface(),
-            self.built_in_self_test(),
-            self.status_registers(),
-            self.dram_standards_compliance(),
-            self.protocol_adaptation_logic(),
-            self.modular_design(),
-            self.parameterization(),
-            self.access_control_logic(),
-            self.data_scrambling_logic(),
-            self.assertions(),
-            self.latency_measurement(),
-            self.throughput_measurement(),
-            self.utilization_measurement()
+            self.command_decoder,
+            self.timing_controller,
+            self.data_buffer,
+            self.power_management,
+            MemoryOperations(self),
+            AddressMapper(16, 10, 3),  # Pass the correct arguments
+            AccessArbitration(self),
+            ClockDomainCrossing(self.data_width),  # Add ClockDomainCrossing submodule
+            # Add other submodules here
         ]
 
         # Address mapping signals
@@ -288,425 +256,9 @@ class MemoryController(Module):
             bank_bits=3
         )
 
-    def command_decoder(self):
-        return CommandDecoder()
-
-    def timing_controller(self):
-        return TimingController(
-            cas_latency=self.cas_latency,
-            tRCD=self.tRCD,
-            tRP=self.tRP,
-            tRAS=self.tRAS
-        )
-
-    # Method to manage data buffering
-    def data_buffer(self):
-        return DataBuffer(
-            data_width=self.data_width,
-            burst_length=self.burst_length
-        )
-
-    # Method for power management
-    def power_management(self):
-        return PowerManagement()
-
-    # Method for handling memory read/write operations
-    def memory_operations(self):
-        m = Module()
-        m.sync += [
-            If(self.rst,  # Reset condition
-                self.buffer_index.eq(0),  # Reset buffer index
-                self.data_in_fifo.din.eq(0),  # Clear data in FIFO
-                self.data_in_fifo.we.eq(0),  # Disable write enable
-                self.data_out_fifo.re.eq(0)  # Disable read enable
-            ).Elif(self.ready,  # If ready signal is high
-                If(self.mem_read,  # If read operation
-                    self.buffer[self.buffer_index].eq(self.mem_array[self.address]),  # Load data from memory to buffer
-                    self.data_out_fifo.din.eq(self.mem_array[self.address]),  # Load data into output FIFO
-                    self.data_out_fifo.we.eq(1)  # Write enable for output FIFO
-                ).Elif(self.mem_write,  # If write operation
-                    self.mem_array[self.address].eq(self.buffer[self.buffer_index]),  # Write buffer data to memory
-                    self.data_in_fifo.din.eq(self.data_in),  # Load input data into FIFO
-                    self.data_in_fifo.we.eq(1)  # Write enable for input FIFO
-                )
-            )
-        ]
-        return m
-
-    # Method for address mapping
-    def address_mapping(self):
-        m = Module()
-        m.comb += [
-            self.row_addr.eq(self.addr[16:32]),  # Map higher address bits to row address
-            self.col_addr.eq(self.addr[2:12]),  # Map lower address bits to column address
-            self.bank_addr.eq(self.addr[12:15])  # Map middle address bits to bank address
-        ]
-        return m
-
-    # Method for access arbitration between multiple requestors
-    def access_arbitration(self):
-        m = Module()
-        arbiter = RoundRobin(4)  # Instantiate a round-robin arbiter for 4 requestors
-        m.submodules.arbiter = arbiter  # Add arbiter as submodule
-        m.comb += [
-            arbiter.request.eq(self.req),  # Connect request signals to arbiter
-            self.grant.eq(arbiter.grant)  # Connect arbiter grant signals to grant output
-        ]
-        return m
-
-    # Method for ECC (Error Correcting Code) logic
-    def ecc_logic(self):
-        m = Module()
-        # Simple ECC logic example
-        m.comb += [
-            self.ecc_out.eq(self.data_in ^ self.ecc_in)  # Simple XOR for ECC example (replace with real ECC logic)
-        ]
-        return m
-
-    # Method for DRAM refresh logic
-    def refresh_logic(self):
-        m = Module()
-        refresh_counter = Signal(32)  # Counter for refresh timing
-        m.sync += [
-            If(self.rst,  # Reset condition
-                refresh_counter.eq(0)  # Reset refresh counter
-            ).Else(
-                If(refresh_counter == 100000,  # Example refresh threshold
-                    self.refresh.eq(1),  # Set refresh signal
-                    refresh_counter.eq(0)  # Reset counter
-                ).Else(
-                    self.refresh.eq(0),  # Clear refresh signal
-                    refresh_counter.eq(refresh_counter + 1)  # Increment counter
-                )
-            )
-        ]
-        return m
-
-    # Method for data width conversion
-    def data_width_conversion_logic(self):
-        m = Module()
-        m.comb += [
-            If(self.data_width == 64,  # If data width is 64-bit
-                self.data_width_conversion.eq(Cat(self.data_in[0:32], self.data_in[32:64]))  # Concatenate two 32-bit sections
-            ).Else(
-                self.data_width_conversion.eq(self.data_in)  # No conversion
-            )
-        ]
-        return m
-
-    # Method for byte enable logic in partial writes
-    def byte_enable_logic(self):
-        m = Module()
-        m.comb += [
-            If(self.mem_write,  # If write operation
-                self.byte_enable.eq(0b1111)  # Enable all bytes (example)
-            ).Else(
-                self.byte_enable.eq(0b0000)  # Disable all bytes
-            )
-        ]
-        return m
-
-    # Method for handling clock domain crossing
-    def clock_domain_crossing(self):
-        m = Module()
-        m.submodules += MultiReg(self.data_in, self.data_in_sync, "sys")  # Synchronize data input to system clock
-        m.submodules += MultiReg(self.data_out, self.data_out_sync, "sys")  # Synchronize data output to system clock
-        return m
-
-    # Method for power-up initialization
-    def power_up_initialization(self):
-        m = Module()
-        init_counter = Signal(32)  # Counter for initialization timing
-        m.sync += [
-            If(self.rst,  # Reset condition
-                init_counter.eq(0),  # Reset initialization counter
-                self.init_done.eq(0)  # Clear initialization done signal
-            ).Else(
-                If(init_counter < 100000,  # Example initialization duration
-                    init_counter.eq(init_counter + 1)  # Increment counter
-                ).Else(
-                    self.init_done.eq(1)  # Set initialization done signal
-                )
-            )
-        ]
-        return m
-
-    # Method for mode register setup
-    def mode_register_setup(self):
-        m = Module()
-        m.sync += [
-            If(self.init_done,  # If initialization is complete
-                self.mode_register.eq(0x1234)  # Set mode register (example value)
-            )
-        ]
-        return m
-
-    # Method for calibration
-    def calibration(self):
-        m = Module()
-        calibration_counter = Signal(32)  # Counter for calibration timing
-        m.sync += [
-            If(self.rst,  # Reset condition
-                calibration_counter.eq(0),  # Reset calibration counter
-                self.calibration_done.eq(0)  # Clear calibration done signal
-            ).Else(
-                If(calibration_counter < 50000,  # Example calibration duration
-                    calibration_counter.eq(calibration_counter + 1                ).Else(
-                    self.calibration_done.eq(1)  # Set calibration done signal
-                )
-            )
-        ]
-        return m
-
-    # Method for managing low-power modes
-    def low_power_modes(self):
-        m = Module()
-        m.sync += [
-            If(self.rst,  # Reset condition
-                self.low_power_mode.eq(0)  # Clear low-power mode signal
-            ).Else(
-                If(self.cmd_decoded == 0,  # If no command
-                    self.low_power_mode.eq(1)  # Enter low-power mode
-                ).Else(
-                    self.low_power_mode.eq(0)  # Exit low-power mode
-                )
-            )
-        ]
-        return m
-
-    # Method for dynamic power control
-    def dynamic_power_control(self):
-        m = Module()
-        m.sync += [
-            If(self.rst,  # Reset condition
-                self.power_control.eq(0)  # Clear power control signal
-            ).Else(
-                If(self.mem_read | self.mem_write,  # If memory read or write
-                    self.power_control.eq(1)  # Enable power control
-                ).Else(
-                    self.power_control.eq(0)  # Disable power control
-                )
-            )
-        ]
-        return m
-
-    # Method for command scheduling
-    def command_scheduler(self):
-        m = Module()
-        m.sync += [
-            If(self.rst,  # Reset condition
-                self.command_queue_index.eq(0)  # Reset command queue index
-            ).Else(
-                If(self.mem_read | self.mem_write,  # If read or write command
-                    self.command_queue[self.command_queue_index].eq(self.cmd_decoded),  # Add command to queue
-                    If(self.command_queue_index == 15,  # If queue is full
-                        self.command_queue_index.eq(0)  # Reset queue index
-                    ).Else(
-                        self.command_queue_index.eq(self.command_queue_index + 1)  # Increment queue index
-                    )
-                )
-            )
-        ]
-        return m
-
-    # Method for managing lookahead buffers
-    def lookahead_buffers(self):
-        m = Module()
-        m.sync += [
-            If(self.rst,  # Reset condition
-                self.lookahead_buffer_index.eq(0)  # Reset lookahead buffer index
-            ).Else(
-                If(self.mem_read | self.mem_write,  # If read or write command
-                    self.lookahead_buffer[self.lookahead_buffer_index].eq(self.cmd_decoded),  # Add command to lookahead buffer
-                    If(self.lookahead_buffer_index == 15,  # If buffer is full
-                        self.lookahead_buffer_index.eq(0)  # Reset buffer index
-                    ).Else(
-                        self.lookahead_buffer_index.eq(self.lookahead_buffer_index + 1)  # Increment buffer index
-                    )
-                )
-            )
-        ]
-        return m
-
-    # Method for JTAG interface
-    def jtag_interface(self):
-        m = Module()
-        # Simple JTAG logic example
-        m.sync += [
-            If(self.jtag_tck,  # On JTAG clock edge
-                self.jtag_tdo.eq(self.jtag_tdi)  # Pass data through JTAG chain
-            )
-        ]
-        return m
-
-    # Method for Built-In Self-Test (BIST)
-    def built_in_self_test(self):
-        m = Module()
-        bist_counter = Signal(32)  # Counter for BIST timing
-        m.sync += [
-            If(self.bist_start,  # If BIST start signal is high
-                bist_counter.eq(0),  # Reset BIST counter
-                self.bist_done.eq(0),  # Clear BIST done signal
-                self.bist_pass.eq(0)  # Clear BIST pass signal
-            ).Else(
-                If(bist_counter < 100000,  # Example BIST duration
-                    bist_counter.eq(bist_counter + 1)  # Increment BIST counter
-                ).Else(
-                    self.bist_done.eq(1),  # Set BIST done signal
-                    self.bist_pass.eq(1)  # Set BIST pass signal (example always pass)
-                )
-            )
-        ]
-        return m
-
-    # Method for managing status registers
-    def status_registers(self):
-        m = Module()
-        m.sync += [
-            If(self.rst,  # Reset condition
-                self.status_register.eq(0)  # Clear status register
-            ).Else(
-                self.status_register.eq(Cat(self.ready, self.low_power_mode, self.calibration_done))  # Update status register
-            )
-        ]
-        return m
-
-    # Method for ensuring DRAM standards compliance
-    def dram_standards_compliance(self):
-        m = Module()
-        m.sync += [
-            If(self.rst,  # Reset condition
-                self.dram_compliance.eq(0)  # Clear compliance signal
-            ).Else(
-                self.dram_compliance.eq(1)  # Set compliance signal (example always compliant)
-            )
-        ]
-        return m
-
-    # Method for protocol adaptation logic
-    def protocol_adaptation_logic(self):
-        m = Module()
-        m.sync += [
-            If(self.rst,  # Reset condition
-                self.protocol_adaptation.eq(0)  # Clear protocol adaptation signal
-            ).Else(
-                self.protocol_adaptation.eq(1)  # Set protocol adaptation signal (example always adapted)
-            )
-        ]
-        return m
-
-    # Method for modular design logic
-    def modular_design(self):
-        m = Module()
-        m.sync += [
-            If(self.rst,  # Reset condition
-                self.module_select.eq(0)  # Clear module select signal
-            ).Else(
-                self.module_select.eq(1)  # Set module select signal (example always select module 1)
-            )
-        ]
-        return m
-
-    # Method for parameterization of the memory controller
-    def parameterization(self):
-        m = Module()
-        m.sync += [
-            If(self.rst,  # Reset condition
-                self.param_data_width.eq(config.get('data_width', 64)),  # Set default data width to 64-bit
-                self.param_burst_length.eq(config.get('burst_length', 8))  # Set default burst length to 8
-            ).Else(
-                self.param_data_width.eq(config['data_width']),  # Update data width from config
-                self.param_burst_length.eq(config['burst_length'])  # Update burst length from config
-            )
-        ]
-        return m
-
-    # Method for access control logic
-    def access_control_logic(self):
-        m = Module()
-        m.sync += [
-            If(self.rst,  # Reset condition
-                self.access_control.eq(0)  # Clear access control signal
-            ).Else(
-                If(self.addr < 0x1000,  # Example: restrict access to lower addresses
-                    self.access_control.eq(1)  # Set access control signal
-                ).Else(
-                    self.access_control.eq(0)  # Clear access control signal
-                )
-            )
-        ]
-        return m
-
-    # Method for data scrambling logic
-    def data_scrambling_logic(self):
-        m = Module()
-        m.sync += [
-            If(self.rst,  # Reset condition
-                self.data_scrambling.eq(0)  # Clear data scrambling signal
-            ).Else(
-                self.data_scrambling.eq(self.data_in ^ 0xAA)  # Example: simple XOR scrambling
-            )
-        ]
-        return m
-
-    # Method for adding assertions for debugging
-    def assertions(self):
-        m = Module()
-        m.sync += [
-            If(self.mem_read & self.mem_write,  # If both read and write are high (illegal state)
-                self.assertion_failed.eq(1)  # Set assertion failed signal
-            ).Else(
-                self.assertion_failed.eq(0)  # Clear assertion failed signal
-            ),
-            If(self.addr >= 1024,  # Example: address out of range
-                self.assertion_failed.eq(1)  # Set assertion failed signal
-            ).Else(
-                self.assertion_failed.eq(0)  # Clear assertion failed signal
-            )
-        ]
-        return m
-
-    # Method for latency measurement
-    def latency_measurement(self):
-        m = Module()
-        latency_counter = Signal(32)  # Counter for latency measurement
-        m.sync += [
-            If(self.mem_read | self.mem_write,  # If read or write operation
-                latency_counter.eq(latency_counter + 1)  # Increment latency counter
-            ).Else(
-                self.latency.eq(latency_counter),  # Set latency signal
-                latency_counter.eq(0)  # Reset latency counter
-            )
-        ]
-        return m
-
-    # Method for throughput measurement
-    def throughput_measurement(self):
-        m = Module()
-        throughput_counter = Signal(32)  # Counter for throughput measurement
-        m.sync += [
-            If(self.mem_read | self.mem_write,  # If read or write operation
-                throughput_counter.eq(throughput_counter + 1)  # Increment throughput counter
-            ).Else(
-                self.throughput.eq(throughput_counter),  # Set throughput signal
-                throughput_counter.eq(0)  # Reset throughput counter
-            )
-        ]
-        return m
-
-    # Method for utilization measurement
-    def utilization_measurement(self):
-        m = Module()
-        utilization_counter = Signal(32)  # Counter for utilization measurement
-        m.sync += [
-            If(self.mem_read | self.mem_write,  # If read or write operation
-                utilization_counter.eq(utilization_counter + 1)  # Increment utilization counter
-            ).Else(
-                self.utilization.eq(utilization_counter),  # Set utilization signal
-                utilization_counter.eq(0)  # Reset utilization counter
-            )
-        ]
-        return m
+        # Clock domain crossing instances
+        self.submodules.data_in_cdc = ClockDomainCrossing(self.data_width)
+        self.submodules.data_out_cdc = ClockDomainCrossing(self.data_width)
 
     def elaborate(self, platform):
         m = Module()
@@ -714,6 +266,8 @@ class MemoryController(Module):
         m.submodules.timing_controller = self.timing_controller
         m.submodules.data_buffer = self.data_buffer
         m.submodules.power_management = self.power_management
+        m.submodules.data_in_cdc = self.data_in_cdc
+        m.submodules.data_out_cdc = self.data_out_cdc
 
         # Connect signals between modules
         m.d.comb += [
@@ -727,8 +281,8 @@ class MemoryController(Module):
             self.data_buffer.ready.eq(self.timing_controller.ready),
             self.data_buffer.mem_read.eq(self.mem_read),
             self.data_buffer.mem_write.eq(self.mem_write),
-            self.data_buffer.data_in.eq(self.data_in),
-            self.data_out.eq(self.data_buffer.data_out),
+            self.data_buffer.data_in.eq(self.data_in_cdc.dst_data),
+            self.data_out.eq(self.data_out_cdc.dst_data),
             self.power_management.rst.eq(self.rst),
             self.power_management.cmd_decoded.eq(self.command_decoder.cmd_decoded),
             self.ready.eq(self.timing_controller.ready)
@@ -737,9 +291,24 @@ class MemoryController(Module):
         m.d.comb += [
             self.address_mapper.addr_in.eq(self.addr),
             # Use mapped addresses in other parts of the controller
-            self.some_module.row_addr.eq(self.address_mapper.row_addr),
-            self.some_module.col_addr.eq(self.address_mapper.col_addr),
-            self.some_module.bank_addr.eq(self.address_mapper.bank_addr),
+            self.row_addr.eq(self.address_mapper.row_addr),
+            self.col_addr.eq(self.address_mapper.col_addr),
+            self.bank_addr.eq(self.address_mapper.bank_addr),
+        ]
+
+        # Clock domain crossing connections
+        m.d.comb += [
+            self.data_in_cdc.src_clk.eq(self.clk),
+            self.data_in_cdc.src_rst.eq(self.rst),
+            self.data_in_cdc.src_data.eq(self.data_in),
+            self.data_in_cdc.dst_clk.eq(self.clk),  # Assuming same clock domain for simplicity
+            self.data_in_cdc.dst_rst.eq(self.rst),
+
+            self.data_out_cdc.src_clk.eq(self.clk),
+            self.data_out_cdc.src_rst.eq(self.rst),
+            self.data_out_cdc.src_data.eq(self.data_buffer.data_out),
+            self.data_out_cdc.dst_clk.eq(self.clk),  # Assuming same clock domain for simplicity
+            self.data_out_cdc.dst_rst.eq(self.rst)
         ]
 
         # Rest of the elaborate method...
@@ -793,36 +362,6 @@ def validate_config(config):
         raise ValueError("Burst length must be 4, 8, or 16")
 
 def main():
-    try:
-        config_path = 'configs/default_config.json'
-        config = read_config(config_path)
-        
-        # Validate configuration
-        validate_config(config)
-
-        optimized_params = optimize_parameters(config)
-        config.update(optimized_params)
-
-        print("Optimized parameters:")
-        print(f"Clock Frequency: {config['clock_frequency']} MHz")
-        print(f"CAS Latency: {config['cas_latency']}")
-        print(f"Memory Type: {config['memory_type']}")
-
-        generate_verilog(config)
-        print("Memory Controller generated successfully.")
-    except FileNotFoundError:
-        print(f"Error: Configuration file not found at {config_path}")
-    except json.JSONDecodeError:
-        print(f"Error: Invalid JSON in configuration file {config_path}")
-    except ValueError as ve:
-        print(f"Error in configuration: {str(ve)}")
-    except Exception as e:
-        print(f"An unexpected error occurred: {str(e)}")
-        import traceback
-        traceback.print_exc()
-
-# Update the read_config function to handle file-related errors
-def read_config(file_path):
     try:
         config_path = 'configs/default_config.json'
         config = read_config(config_path)

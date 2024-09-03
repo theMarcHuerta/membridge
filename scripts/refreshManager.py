@@ -12,48 +12,34 @@ class RefreshManager(Module):
         self.refresh_interval = int(refresh_rate * 1e-3 * 1e9)  # Convert ms to ns
         self.tRFC = tRFC
         
+        # Internal signals
         self.counter = Signal(32)
         self.refresh_in_progress = Signal()
         self.refresh_counters = Array([Signal(32) for _ in range(bank_groups * banks_per_group)])
         
-    def elaborate(self, platform):
-        m = Module()
-        
-        total_banks = len(self.refresh_counters)
-        current_bank = Signal(max=total_banks)
-        
-        m.d.sync += [
+        # Add refresh logic
+        self.sync += [
             If(self.rst,
                 self.counter.eq(0),
                 self.refresh_needed.eq(0),
                 self.refresh_in_progress.eq(0),
-                current_bank.eq(0),
                 [counter.eq(0) for counter in self.refresh_counters]
             ).Elif(self.refresh_in_progress,
                 If(self.counter >= self.tRFC,
                     self.refresh_in_progress.eq(0),
-                    self.counter.eq(0),
-                    current_bank.eq((current_bank + 1) % total_banks)
+                    self.counter.eq(0)
                 ).Else(
                     self.counter.eq(self.counter + 1)
                 )
             ).Else(
-                [
-                    If(counter >= self.refresh_interval,
-                        self.refresh_needed.eq(1)
-                    ).Else(
-                        counter.eq(counter + 1)
-                    )
-                    for counter in self.refresh_counters
-                ],
+                self.counter.eq(self.counter + 1),
+                If(self.counter >= self.refresh_interval,
+                    self.refresh_needed.eq(1)
+                ),
                 If(self.refresh_done,
                     self.refresh_needed.eq(0),
                     self.refresh_in_progress.eq(1),
-                    self.refresh_counters[current_bank].eq(0),
-                    self.bank_group.eq(current_bank // banks_per_group),
-                    self.bank.eq(current_bank % banks_per_group)
+                    self.counter.eq(0)
                 )
             )
         ]
-        
-        return m

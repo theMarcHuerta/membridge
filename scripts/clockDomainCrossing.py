@@ -12,13 +12,16 @@ class ClockDomainCrossing(Module):
         sync_ff1 = Signal(width)
         sync_ff2 = Signal(width)
 
-        self.sync += [
+        # Use += instead of = for assigning to sync domains
+        self.sync.src += [
+            sync_ff1.eq(self.src_data)
+        ]
+
+        self.sync.dst += [
             If(self.dst_rst,
-                sync_ff1.eq(0),
                 sync_ff2.eq(0),
                 self.dst_data.eq(0)
             ).Else(
-                sync_ff1.eq(self.src_data),
                 sync_ff2.eq(sync_ff1),
                 self.dst_data.eq(sync_ff2)
             )

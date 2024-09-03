@@ -9,31 +9,26 @@ class QoSManager(Module):
         self.current_priority = Signal(max=num_requestors)
         self.request_completed = Signal()
         
-        self.qos_policy = qos_policy
-        self.num_requestors = num_requestors
+        # Internal signals
+        self.request_counters = Array([Signal(32) for _ in range(num_requestors)])
         
-    def elaborate(self, platform):
-        m = Module()
-        
-        request_counters = Array([Signal(32) for _ in range(self.num_requestors)])
-        
-        m.d.sync += [
+        # Add QoS logic
+        self.sync += [
             If(self.rst,
                 self.current_priority.eq(0),
-                [counter.eq(0) for counter in request_counters]
+                [counter.eq(0) for counter in self.request_counters]
             ).Elif(self.request_completed,
-                If(self.qos_policy == 'round_robin',
-                    self.current_priority.eq((self.current_priority + 1) % self.num_requestors)
-                ).Elif(self.qos_policy == 'weighted',
+                If(qos_policy == 'round_robin',
+                    # Use bitwise AND for modulo operation
+                    self.current_priority.eq((self.current_priority + 1) & (num_requestors - 1))
+                ).Elif(qos_policy == 'weighted',
                     # Implement weighted priority logic here
                     # For simplicity, we'll just use round-robin for now
-                    self.current_priority.eq((self.current_priority + 1) % self.num_requestors)
+                    self.current_priority.eq((self.current_priority + 1) & (num_requestors - 1))
                 )
             )
         ]
         
-        m.d.comb += [
+        self.comb += [
             self.grant.eq(1 << self.current_priority)
         ]
-        
-        return m

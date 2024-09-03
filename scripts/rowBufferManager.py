@@ -10,39 +10,31 @@ class RowBufferManager(Module):
         self.current_row = Signal(16)
         self.requested_row = Signal(16)
         
-        self.policy = row_buffer_policy
+        # Internal signals
+        self.row_open = Signal()
         
-    def elaborate(self, platform):
-        m = Module()
-        
-        row_open = Signal()
-        
-        m.d.sync += [
+        # Add row buffer management logic
+        self.sync += [
             If(self.rst,
-                row_open.eq(0),
+                self.row_open.eq(0),
                 self.current_row.eq(0)
             ).Elif(self.row_activate,
-                row_open.eq(1),
+                self.row_open.eq(1),
                 self.current_row.eq(self.requested_row)
             ).Elif(self.row_precharge,
-                row_open.eq(0)
+                self.row_open.eq(0)
             )
         ]
         
-        m.d.comb += [
-            self.row_hit.eq(row_open & (self.current_row == self.requested_row))
+        self.comb += [
+            self.row_hit.eq(self.row_open & (self.current_row == self.requested_row))
         ]
         
-        if self.policy == 'closed_page':
-            m.d.sync += [
+        if row_buffer_policy == 'closed_page':
+            self.sync += [
                 If(self.row_activate,
                     self.row_precharge.eq(1)
                 ).Else(
                     self.row_precharge.eq(0)
                 )
             ]
-        elif self.policy == 'open_page':
-            # The row remains open until explicitly precharged
-            pass
-        
-        return m

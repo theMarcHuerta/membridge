@@ -157,8 +157,8 @@ class MemoryController(Module):
             raise RuntimeError(f"Error initializing controller components: {str(e)}")
 
         self.submodules.data_buffer = DataBuffer(config['data_width'], config['burst_length'])
-        self.submodules.power_management = PowerManagement(config['power_down_modes'])
-        self.submodules.refresh_manager = RefreshManager(config['refresh_rate'], config['tRFC'])
+        self.submodules.power_management = PowerManagement(config['power_down_modes'], config['deep_power_down_threshold'])
+        self.submodules.refresh_manager = RefreshManager(config['refresh_rate'], config['tRFC'], config['bank_groups'], config['banks_per_group'])
         self.submodules.bank_state_tracker = BankStateTracker(config['bank_groups'], config['banks_per_group'])
         self.submodules.command_scheduler = CommandScheduler(config['command_queue_depth'], config['scheduling_policy'])
         self.submodules.row_buffer_manager = RowBufferManager(config['row_buffer_policy'])
@@ -429,28 +429,41 @@ class MemoryController(Module):
 
 # Function to generate Verilog code from the MemoryController module
 def generate_verilog(config):
-    # Create the rtl directory if it doesn't exist
     os.makedirs('rtl', exist_ok=True)
 
-    mem_ctrl = MemoryController(config)  # Instantiate the MemoryController
-    verilog_output = verilog.convert(mem_ctrl, ios={mem_ctrl.clk, mem_ctrl.rst, mem_ctrl.addr, 
-                                                    mem_ctrl.data_in, mem_ctrl.data_out, 
-                                                    mem_ctrl.mem_write, mem_ctrl.mem_read, 
-                                                    mem_ctrl.ready, mem_ctrl.refresh, 
-                                                    mem_ctrl.chip_select, mem_ctrl.ras, 
-                                                    mem_ctrl.cas, mem_ctrl.we})  # Convert to Verilog
+    mem_ctrl = MemoryController(config)
+    
+    # Convert the main MemoryController
+    verilog_output = verilog.convert(mem_ctrl, name="DDR5_Memory_Controller", ios={mem_ctrl.clk, mem_ctrl.rst, mem_ctrl.addr, mem_ctrl.data_in, mem_ctrl.data_out, mem_ctrl.mem_write, mem_ctrl.mem_read, mem_ctrl.ready})
+    with open('rtl/DDR5_Memory_Controller.v', 'w') as f:
+        f.write(verilog_output.main_source)
 
-    # Write the main Verilog file
-    with open('rtl/DDR5_Memory_Controller.v', 'w') as file:
-        file.write(verilog_output.main_source)
+    # Convert submodules
+    submodules = [
+        ('TimingController', TimingController(config)),
+        ('CommandDecoder', CommandDecoder(mem_ctrl.memory_type_obj.get_command_encoding())),
+        ('DataBuffer', DataBuffer(config['data_width'], config['burst_length'])),
+        ('PowerManagement', PowerManagement(config['power_down_modes'], config['deep_power_down_threshold'])),
+        ('RefreshManager', RefreshManager(config['refresh_rate'], config['tRFC'], config['bank_groups'], config['banks_per_group'])),
+        ('BankStateTracker', BankStateTracker(config['bank_groups'], config['banks_per_group'])),
+        ('CommandScheduler', CommandScheduler(config['command_queue_depth'], config['scheduling_policy'])),
+        ('RowBufferManager', RowBufferManager(config['row_buffer_policy'])),
+        ('QoSManager', QoSManager(config['num_requestors'], config['qos_policy'])),
+        ('AddressMapper', AddressMapper(config)),
+        ('AccessArbitration', AccessArbitration(mem_ctrl)),
+        ('ClockDomainCrossing', ClockDomainCrossing(config['data_width'])),
+    ]
 
-    # If there are any additional sources, they will be in verilog_output.ns
-    for name in dir(verilog_output.ns):
-        if not name.startswith('__'):  # Ignore special methods/attributes
-            content = getattr(verilog_output.ns, name)
-            if isinstance(content, str):
-                with open(f'rtl/{name}.v', 'w') as additional_file:  # Write additional sources
-                    additional_file.write(content)
+    if config['ecc_enabled']:
+        submodules.extend([
+            ('ECCEncoder', ECCEncoder(config['data_width'])),
+            ('ECCDecoder', ECCDecoder(config['data_width']))
+        ])
+
+    for name, module in submodules:
+        verilog_output = verilog.convert(module, name=name)
+        with open(f'rtl/{name}.v', 'w') as f:
+            f.write(verilog_output.main_source)
 
     print("Verilog files generated successfully.")
 

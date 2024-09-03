@@ -6,15 +6,10 @@ class ECCDecoder(Module):
         self.data_out = Signal(data_width)
         self.error_detected = Signal()
 
-    def elaborate(self, platform):
-        m = Module()
-
         # Simple parity-based ECC decoding (for demonstration purposes)
         parity = Signal(8)
-        m.d.comb += [
+        self.comb += [
             self.data_out.eq(self.data_in[:data_width]),
             parity.eq(reduce(lambda x, y: x ^ y, [self.data_in[i] for i in range(data_width)])),
             self.error_detected.eq(parity != self.data_in[data_width:])
         ]
-
-        return m

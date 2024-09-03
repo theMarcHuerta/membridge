@@ -1,58 +1,65 @@
 from migen import *
 
 class TimingController(Module):
-    def __init__(self, cas_latency, tRCD, tRP, tRAS):
+    def __init__(self, config):
         self.rst = Signal()
         self.cmd_decoded = Signal(4)
-        self.timer = Signal(32)
-        self.state = Signal(3)
+        self.bank_group = Signal(max=config['bank_groups'])
+        self.bank = Signal(max=config['banks_per_group'])
         self.ready = Signal()
-        self.cas_latency = cas_latency
-        self.tRCD = tRCD
-        self.tRP = tRP
-        self.tRAS = tRAS
+        
+        self.tRCD = config['tRCD']
+        self.tRP = config['tRP']
+        self.tRAS = config['tRAS']
+        self.tRC = config['tRC']
+        self.tWR = config['tWR']
+        
+        self.timers = Array([Signal(32) for _ in range(config['bank_groups'] * config['banks_per_group'])])
 
     def elaborate(self, platform):
         m = Module()
+        
+        bank_index = self.bank_group * len(self.bank) + self.bank
+        
         m.d.sync += [
             If(self.rst,
-                self.timer.eq(0),
-                self.state.eq(0),
-                self.ready.eq(0)
+                [timer.eq(0) for timer in self.timers],
+                self.ready.eq(1)
             ).Else(
-                Case(self.state, {
-                    # Idle state: Wait for a command
-                    0: If(self.cmd_decoded != 0,
-                          self.state.eq(1),
-                          self.timer.eq(0),
-                          self.ready.eq(0)),
-                    # CAS Latency state: Wait for CAS latency to elapse
-                    1: If(self.timer >= self.cas_latency,
-                          self.state.eq(2),
-                          self.ready.eq(1)
-                       ).Else(
-                          self.timer.eq(self.timer + 1)
-                       ),
-                    # RCD state: Wait for tRCD to elapse
-                    2: If(self.timer >= self.tRCD,
-                          self.state.eq(3)
-                       ).Else(
-                          self.timer.eq(self.timer + 1)
-                       ),
-                    # RP state: Wait for tRP to elapse
-                    3: If(self.timer >= self.tRP,
-                          self.state.eq(4)
-                       ).Else(
-                          self.timer.eq(self.timer + 1)
-                       ),
-                    # RAS state: Wait for tRAS to elapse
-                    4: If(self.timer >= self.tRAS,
-                          self.state.eq(0)  # Return to idle state
-                       ).Else(
-                          self.timer.eq(self.timer + 1)
-                       ),
-                    "default": self.state.eq(0)  # Default to idle state
+                Case(self.cmd_decoded, {
+                    # READ or WRITE
+                    0b0101 | 0b0100: [
+                        If(self.timers[bank_index] == 0,
+                            self.ready.eq(1),
+                            self.timers[bank_index].eq(self.tRCD)
+                        ).Else(
+                            self.ready.eq(0),
+                            self.timers[bank_index].eq(self.timers[bank_index] - 1)
+                        )
+                    ],
+                    # ACTIVATE
+                    0b0011: [
+                        If(self.timers[bank_index] == 0,
+                            self.ready.eq(1),
+                            self.timers[bank_index].eq(self.tRAS)
+                        ).Else(
+                            self.ready.eq(0),
+                            self.timers[bank_index].eq(self.timers[bank_index] - 1)
+                        )
+                    ],
+                    # PRECHARGE
+                    0b0010: [
+                        If(self.timers[bank_index] == 0,
+                            self.ready.eq(1),
+                            self.timers[bank_index].eq(self.tRP)
+                        ).Else(
+                            self.ready.eq(0),
+                            self.timers[bank_index].eq(self.timers[bank_index] - 1)
+                        )
+                    ],
+                    "default": self.ready.eq(1)
                 })
             )
         ]
+        
         return m

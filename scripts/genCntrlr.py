@@ -14,44 +14,74 @@ from pulp import *
 from migen.genlib.fifo import SyncFIFO
 from migen.genlib.cdc import MultiReg
 from migen.sim import run_simulation
+from scripts.refreshManager import RefreshManager
+from scripts.bankStateTracker import BankStateTracker
+from scripts.commandScheduler import CommandScheduler
+from scripts.rowBufferManager import RowBufferManager
+from scripts.qosManager import QoSManager
+from scripts.eccEncoder import ECCEncoder
+from scripts.eccDecoder import ECCDecoder
 
 # Function to read configuration from a JSON file
 def read_config(file_path):
     try:
         with open(file_path, 'r') as file:
-            return json.load(file)
+            config = json.load(file)
     except FileNotFoundError:
         raise FileNotFoundError(f"Configuration file not found: {file_path}")
     except json.JSONDecodeError:
         raise json.JSONDecodeError(f"Invalid JSON in configuration file: {file_path}")
+    
+    # Add more configuration options with default values
+    config.setdefault('address_mapping_scheme', 'linear')
+    config.setdefault('refresh_rate', 64)  # in ms
+    config.setdefault('bank_groups', 4)
+    config.setdefault('banks_per_group', 4)
+    config.setdefault('rows', 65536)
+    config.setdefault('columns', 1024)
+    config.setdefault('page_size', 2048)
+    config.setdefault('tRCD', 18)
+    config.setdefault('tRP', 18)
+    config.setdefault('tRAS', 32)
+    config.setdefault('tRC', 50)
+    config.setdefault('tWR', 20)
+    config.setdefault('tRFC', 350)
+    config.setdefault('row_buffer_policy', 'open_page')
+    config.setdefault('command_queue_depth', 32)
+    config.setdefault('write_recovery_time', 12)
+    config.setdefault('read_to_precharge_time', 8)
+    config.setdefault('scheduling_policy', 'FR-FCFS')
+    config.setdefault('power_down_modes', ['self-refresh', 'power-down'])
+    config.setdefault('num_requestors', 4)
+    config.setdefault('qos_policy', 'FCFS')
+    config.setdefault('ecc_enabled', False)
+    config.setdefault('thermal_shutdown_temp', 85)
+    config.setdefault('deep_power_down_threshold', 70)
+    config.setdefault('run_simulation', False)
+    config.setdefault('run_formal_verification', False)
+    
+    return config
 
 # Function to optimize memory controller parameters using linear programming
 def optimize_parameters(config):
-    prob = LpProblem("Memory_Controller_Optimization", LpMinimize)  # Define an LP problem
+    prob = LpProblem("Memory_Controller_Optimization", LpMinimize)
 
-    # Define LP variables with bounds from config
     clock_freq = LpVariable("clock_freq", lowBound=config['min_clock_frequency'], upBound=config['max_clock_frequency'])
     cas_latency = LpVariable("cas_latency", lowBound=config['min_cas_latency'], upBound=config['max_cas_latency'], cat='Integer')
 
-    # Objective: Minimize CAS latency and maximize clock frequency
     prob += 1000 * cas_latency * config['max_clock_frequency'] - clock_freq * config['max_cas_latency']
 
-    # Constraints based on config bounds
     prob += clock_freq >= config['min_clock_frequency']
     prob += clock_freq <= config['max_clock_frequency']
     prob += cas_latency >= config['min_cas_latency']
     prob += cas_latency <= config['max_cas_latency']
 
-    # Solve the optimization problem
     prob.solve()
 
-    # Return optimized values as a dictionary
     return {
         'clock_frequency': int(value(clock_freq)),
         'cas_latency': int(value(cas_latency))
     }
-
-from abc import ABC, abstractmethod
 
 class MemoryType(ABC):
     @abstractmethod
@@ -85,7 +115,6 @@ class DDR5(MemoryType):
             'REFRESH': 0b0001,
         }
 
-# MemoryController class that defines the behavior and structure of the memory controller
 class MemoryController(Module):
     def __init__(self, config):
         required_params = ['clock_frequency', 'cas_latency', 'data_width', 'burst_length', 'memory_type']
@@ -99,7 +128,6 @@ class MemoryController(Module):
         self.burst_length = config['burst_length']
         self.memory_type = config['memory_type']
 
-        # Validate parameter values
         if self.clock_frequency <= 0:
             raise ValueError("Clock frequency must be positive")
         if self.cas_latency <= 0:
@@ -108,10 +136,9 @@ class MemoryController(Module):
             raise ValueError("Data width must be 8, 16, 32, or 64 bits")
         if self.burst_length not in [4, 8, 16]:
             raise ValueError("Burst length must be 4, 8, or 16")
-        if self.memory_type not in ['DDR5']:  # Add more supported types as needed
+        if self.memory_type not in ['DDR5']:
             raise ValueError(f"Unsupported memory type: {self.memory_type}")
 
-        # Create the appropriate memory type object
         try:
             if self.memory_type == 'DDR5':
                 self.memory_type_obj = DDR5(self.clock_frequency, self.cas_latency)
@@ -120,113 +147,109 @@ class MemoryController(Module):
         except Exception as e:
             raise RuntimeError(f"Error creating memory type object: {str(e)}")
 
-        # Use memory type specific parameters
         try:
             timing_params = self.memory_type_obj.get_timing_parameters()
             command_encoding = self.memory_type_obj.get_command_encoding()
-            self.submodules.timing_controller = TimingController(
-                self.cas_latency,
-                timing_params['tRCD'],
-                timing_params['tRP'],
-                timing_params['tRAS']
-            )
+            self.submodules.timing_controller = TimingController(config)
             self.submodules.command_decoder = CommandDecoder(command_encoding)
         except Exception as e:
             raise RuntimeError(f"Error initializing controller components: {str(e)}")
 
         self.submodules.data_buffer = DataBuffer(config['data_width'], config['burst_length'])
-        self.submodules.power_management = PowerManagement()
+        self.submodules.power_management = PowerManagement(config['power_down_modes'])
+        self.submodules.refresh_manager = RefreshManager(config['refresh_rate'], config['tRFC'])
+        self.submodules.bank_state_tracker = BankStateTracker(config['bank_groups'], config['banks_per_group'])
+        self.submodules.command_scheduler = CommandScheduler(config['command_queue_depth'], config['scheduling_policy'])
+        self.submodules.row_buffer_manager = RowBufferManager(config['row_buffer_policy'])
+        self.submodules.qos_manager = QoSManager(config['num_requestors'], config['qos_policy'])
 
         # Define input signals
-        self.clk = Signal()  # Clock signal
-        self.rst = Signal()  # Reset signal
-        self.addr = Signal(32)  # 32-bit address bus
-        self.data_in = Signal(self.data_width)  # Data input bus
-        self.mem_write = Signal()  # Write enable signal
-        self.mem_read = Signal()  # Read enable signal
+        self.clk = Signal()
+        self.rst = Signal()
+        self.addr = Signal(32)
+        self.data_in = Signal(self.data_width)
+        self.mem_write = Signal()
+        self.mem_read = Signal()
+        self.refresh = Signal()
+        self.chip_select = Signal()
+        self.ras = Signal()
+        self.cas = Signal()
+        self.we = Signal()
 
         # Define output signals
-        self.data_out = Signal(self.data_width)  # Data output bus
-        self.ready = Signal()  # Ready signal indicating data availability
+        self.data_out = Signal(self.data_width)
+        self.ready = Signal()
 
-        # Internal signals for various control and state management
-        self.cmd_decoded = Signal(4)  # Decoded command signal
-        self.address = Signal(32)  # Internal address signal
-        self.timer = Signal(32)  # Timer for timing control
-        self.state = Signal(2)  # State signal for state machine
-        self.buffer = Array([Signal(self.data_width) for _ in range(self.burst_length)])  # Data buffer array
-        self.buffer_index = Signal(max=self.burst_length)  # Index to manage buffer operations
-        self.power_state = Signal(2)  # Power state signal
+        # Internal signals
+        self.cmd_decoded = Signal(4)
+        self.address = Signal(32)
+        self.timer = Signal(32)
+        self.state = Signal(2)
+        self.buffer = Array([Signal(self.data_width) for _ in range(self.burst_length)])
+        self.buffer_index = Signal(max=self.burst_length)
+        self.power_state = Signal(2)
 
         # Memory array simulating DRAM
-        self.mem_array = Array([Signal(self.data_width) for _ in range(1024)])  # Array for memory storage
+        self.mem_array = Array([Signal(self.data_width) for _ in range(1024)])
 
-        # ECC (Error Correcting Code) signals
-        self.ecc_in = Signal(8)  # ECC input signal
-        self.ecc_out = Signal(8)  # ECC output signal
-
-        # Refresh signal for DRAM refresh operations
-        self.refresh = Signal()  # Refresh signal
+        # ECC signals
+        self.ecc_in = Signal(8)
+        self.ecc_out = Signal(8)
 
         # FIFO buffers for data handling
-        self.submodules.data_in_fifo = SyncFIFO(width=self.data_width, depth=16)  # FIFO for data input
-        self.submodules.data_out_fifo = SyncFIFO(width=self.data_width, depth=16)  # FIFO for data output
+        self.submodules.data_in_fifo = SyncFIFO(width=self.data_width, depth=16)
+        self.submodules.data_out_fifo = SyncFIFO(width=self.data_width, depth=16)
 
         # Data width conversion logic
-        self.data_width_conversion = Signal(self.data_width)  # Signal for data width conversion
+        self.data_width_conversion = Signal(self.data_width)
 
         # Byte enable logic for partial writes
-        self.byte_enable = Signal(self.data_width // 8)  # Byte enable signal
-
-        # Timing parameters for DRAM operations
-        self.tRCD = config['tRCD']  # Row to Column Delay
-        self.tRP = config['tRP']  # Row Precharge Time
-        self.tRAS = config['tRAS']  # Row Active Time
+        self.byte_enable = Signal(self.data_width // 8)
 
         # Clock domain crossing signals
-        self.data_in_sync = Signal(self.data_width)  # Synchronized data input
-        self.data_out_sync = Signal(self.data_width)  # Synchronized data output
+        self.data_in_sync = Signal(self.data_width)
+        self.data_out_sync = Signal(self.data_width)
 
         # Initialization flag
-        self.init_done = Signal()  # Signal indicating initialization is complete
+        self.init_done = Signal()
 
         # Mode register setup signal
-        self.mode_register = Signal(16)  # Mode register signal
+        self.mode_register = Signal(16)
 
         # Calibration complete signal
-        self.calibration_done = Signal()  # Signal indicating calibration is complete
+        self.calibration_done = Signal()
 
         # Low-power mode signal
-        self.low_power_mode = Signal()  # Signal for low-power mode
+        self.low_power_mode = Signal()
 
         # Dynamic power control signal
-        self.power_control = Signal()  # Power control signal
+        self.power_control = Signal()
 
         # Command scheduler queue
-        self.command_queue = Array(Signal(4) for _ in range(16))  # Command queue array
-        self.command_queue_index = Signal(max=16)  # Command queue index
+        self.command_queue = Array(Signal(4) for _ in range(16))
+        self.command_queue_index = Signal(max=16)
 
         # Lookahead buffers for pre-fetching commands
-        self.lookahead_buffer = Array(Signal(4) for _ in range(16))  # Lookahead buffer array
-        self.lookahead_buffer_index = Signal(max=16)  # Lookahead buffer index
+        self.lookahead_buffer = Array(Signal(4) for _ in range(16))
+        self.lookahead_buffer_index = Signal(max=16)
 
         # JTAG interface signals for testing
-        self.jtag_tdi = Signal()  # JTAG data in
-        self.jtag_tdo = Signal()  # JTAG data out
-        self.jtag_tck = Signal()  # JTAG clock
-        self.jtag_tms = Signal()  # JTAG mode select
+        self.jtag_tdi = Signal()
+        self.jtag_tdo = Signal()
+        self.jtag_tck = Signal()
+        self.jtag_tms = Signal()
 
-        # BIST (Built-In Self-Test) signals
-        self.bist_start = Signal()  # BIST start signal
-        self.bist_done = Signal()  # BIST done signal
-        self.bist_pass = Signal()  # BIST pass signal
+        # BIST signals
+        self.bist_start = Signal()
+        self.bist_done = Signal()
+        self.bist_pass = Signal()
 
         # Status register for reporting status
-        self.status_register = Signal(32)  # 32-bit status register
+        self.status_register = Signal(32)
 
         # Throughput and utilization measurement signals
-        self.throughput = Signal(32)  # Signal for throughput measurement
-        self.utilization = Signal(32)  # Signal for utilization measurement
+        self.throughput = Signal(32)
+        self.utilization = Signal(32)
 
         # Adding submodules to the memory controller
         self.submodules += [
@@ -235,39 +258,56 @@ class MemoryController(Module):
             self.data_buffer,
             self.power_management,
             MemoryOperations(self),
-            AddressMapper(16, 10, 3),  # Pass the correct arguments
+            AddressMapper(config),
             AccessArbitration(self),
-            ClockDomainCrossing(self.data_width),  # Add ClockDomainCrossing submodule
-            # Add other submodules here
+            ClockDomainCrossing(self.data_width),
         ]
 
         # Address mapping signals
-        self.row_addr = Signal(16)  # Row address signal
-        self.col_addr = Signal(10)  # Column address signal
-        self.bank_addr = Signal(3)  # Bank address signal
+        self.row_addr = Signal(16)
+        self.col_addr = Signal(10)
+        self.bank_addr = Signal(3)
 
         # Request and grant signals for multiple requestors
-        self.req = Signal(4)  # Request signal for 4 requestors
-        self.grant = Signal(4)  # Grant signal for 4 requestors
-
-        self.submodules.address_mapper = AddressMapper(
-            row_bits=16,  # Adjust these values based on your memory configuration
-            col_bits=10,
-            bank_bits=3
-        )
+        self.req = Signal(4)
+        self.grant = Signal(4)
 
         # Clock domain crossing instances
         self.submodules.data_in_cdc = ClockDomainCrossing(self.data_width)
         self.submodules.data_out_cdc = ClockDomainCrossing(self.data_width)
 
+        # Add QoS Manager
+        self.submodules.qos_manager = QoSManager(config['num_requestors'], config['qos_policy'])
+
+        # Add per-bank refresh support
+        self.submodules.refresh_manager = RefreshManager(config['refresh_rate'], config['tRFC'], config['bank_groups'], config['banks_per_group'])
+
+        # Enhance power management
+        self.submodules.power_management = PowerManagement(config['power_down_modes'], config['deep_power_down_threshold'])
+
+        # Add error checking and correction (ECC) support
+        self.ecc_enabled = config['ecc_enabled']
+        if self.ecc_enabled:
+            self.submodules.ecc_encoder = ECCEncoder(self.data_width)
+            self.submodules.ecc_decoder = ECCDecoder(self.data_width)
+
+        # Add support for different data widths
+        self.data_mask = Signal(self.data_width // 8)
+
+        # Add temperature sensor and thermal management
+        self.temperature = Signal(8)  # 8-bit temperature reading
+        self.thermal_shutdown = Signal()
+
+        # Add debug and performance monitoring
+        self.debug_signals = Signal(32)
+        self.performance_counters = Array([Signal(32) for _ in range(8)])
+
     def elaborate(self, platform):
         m = Module()
-        m.submodules.command_decoder = self.command_decoder
-        m.submodules.timing_controller = self.timing_controller
-        m.submodules.data_buffer = self.data_buffer
-        m.submodules.power_management = self.power_management
-        m.submodules.data_in_cdc = self.data_in_cdc
-        m.submodules.data_out_cdc = self.data_out_cdc
+        
+        # Add all submodules
+        for submodule in self.submodules:
+            m.submodules += submodule
 
         # Connect signals between modules
         m.d.comb += [
@@ -275,6 +315,11 @@ class MemoryController(Module):
             self.command_decoder.addr.eq(self.addr),
             self.command_decoder.mem_read.eq(self.mem_read),
             self.command_decoder.mem_write.eq(self.mem_write),
+            self.command_decoder.refresh.eq(self.refresh),
+            self.command_decoder.chip_select.eq(self.chip_select),
+            self.command_decoder.ras.eq(self.ras),
+            self.command_decoder.cas.eq(self.cas),
+            self.command_decoder.we.eq(self.we),
             self.timing_controller.rst.eq(self.rst),
             self.timing_controller.cmd_decoded.eq(self.command_decoder.cmd_decoded),
             self.data_buffer.rst.eq(self.rst),
@@ -285,33 +330,99 @@ class MemoryController(Module):
             self.data_out.eq(self.data_out_cdc.dst_data),
             self.power_management.rst.eq(self.rst),
             self.power_management.cmd_decoded.eq(self.command_decoder.cmd_decoded),
-            self.ready.eq(self.timing_controller.ready)
+            self.ready.eq(self.timing_controller.ready),
+            self.refresh_manager.clk.eq(self.clk),
+            self.refresh_manager.rst.eq(self.rst),
+            self.bank_state_tracker.clk.eq(self.clk),
+            self.bank_state_tracker.rst.eq(self.rst),
+            self.command_scheduler.clk.eq(self.clk),
+            self.command_scheduler.rst.eq(self.rst),
+            self.row_buffer_manager.clk.eq(self.clk),
+            self.row_buffer_manager.rst.eq(self.rst),
         ]
 
+        # Implement main control logic
+        with m.FSM(name="main_control"):
+            with m.State("IDLE"):
+                with m.If(self.refresh_manager.refresh_needed):
+                    m.next = "REFRESH"
+                with m.Elif(self.command_scheduler.cmd_ready):
+                    m.next = "EXECUTE_COMMAND"
+                with m.Elif(self.power_management.power_down_ready):
+                    m.next = "POWER_DOWN"
+
+            with m.State("REFRESH"):
+                m.d.comb += [
+                    self.command_decoder.refresh.eq(1),
+                    self.refresh_manager.refresh_done.eq(self.timing_controller.ready)
+                ]
+                with m.If(self.timing_controller.ready):
+                    m.next = "IDLE"
+
+            with m.State("EXECUTE_COMMAND"):
+                m.d.comb += [
+                    self.command_decoder.mem_read.eq(self.command_scheduler.cmd_type == 0),
+                    self.command_decoder.mem_write.eq(self.command_scheduler.cmd_type == 1),
+                    self.command_decoder.activate.eq(self.command_scheduler.cmd_type == 2),
+                    self.command_decoder.precharge.eq(self.command_scheduler.cmd_type == 3),
+                ]
+                with m.If(self.timing_controller.ready):
+                    m.d.comb += self.command_scheduler.cmd_executed.eq(1)
+                    m.next = "IDLE"
+
+            with m.State("POWER_DOWN"):
+                m.d.comb += self.power_management.enter_power_down.eq(1)
+                with m.If(self.power_management.power_down_entered):
+                    m.next = "IDLE"
+
+            # Add new states for advanced features
+            with m.State("ECC_CHECK"):
+                m.d.comb += [
+                    self.ecc_decoder.data_in.eq(self.data_buffer.data_out),
+                    self.data_out.eq(self.ecc_decoder.data_out),
+                    self.ecc_error.eq(self.ecc_decoder.error_detected)
+                ]
+                m.next = "IDLE"
+
+            with m.State("THERMAL_MANAGEMENT"):
+                with m.If(self.temperature > config['thermal_shutdown_temp']):
+                    m.d.comb += self.thermal_shutdown.eq(1)
+                    m.next = "POWER_DOWN"
+                with m.Else():
+                    m.next = "IDLE"
+
+        # Implement QoS-aware command scheduling
         m.d.comb += [
-            self.address_mapper.addr_in.eq(self.addr),
-            # Use mapped addresses in other parts of the controller
-            self.row_addr.eq(self.address_mapper.row_addr),
-            self.col_addr.eq(self.address_mapper.col_addr),
-            self.bank_addr.eq(self.address_mapper.bank_addr),
+            self.command_scheduler.qos_priority.eq(self.qos_manager.current_priority),
+            self.qos_manager.request_completed.eq(self.command_scheduler.cmd_executed)
         ]
 
-        # Clock domain crossing connections
+        # Implement per-bank refresh logic
         m.d.comb += [
-            self.data_in_cdc.src_clk.eq(self.clk),
-            self.data_in_cdc.src_rst.eq(self.rst),
-            self.data_in_cdc.src_data.eq(self.data_in),
-            self.data_in_cdc.dst_clk.eq(self.clk),  # Assuming same clock domain for simplicity
-            self.data_in_cdc.dst_rst.eq(self.rst),
-
-            self.data_out_cdc.src_clk.eq(self.clk),
-            self.data_out_cdc.src_rst.eq(self.rst),
-            self.data_out_cdc.src_data.eq(self.data_buffer.data_out),
-            self.data_out_cdc.dst_clk.eq(self.clk),  # Assuming same clock domain for simplicity
-            self.data_out_cdc.dst_rst.eq(self.rst)
+            self.refresh_manager.bank_group.eq(self.bank_group),
+            self.refresh_manager.bank.eq(self.bank)
         ]
 
-        # Rest of the elaborate method...
+        # Implement advanced power management
+        m.d.comb += [
+            self.power_management.temperature.eq(self.temperature),
+            self.low_power_mode.eq(self.power_management.low_power_mode)
+        ]
+
+        # Implement ECC
+        if self.ecc_enabled:
+            m.d.comb += [
+                self.ecc_encoder.data_in.eq(self.data_in),
+                self.data_buffer.data_in.eq(self.ecc_encoder.data_out)
+            ]
+
+        # Implement debug and performance monitoring
+        m.d.sync += [
+            self.performance_counters[0].eq(self.performance_counters[0] + self.command_scheduler.cmd_executed),
+            self.performance_counters[1].eq(self.performance_counters[1] + self.refresh_manager.refresh_done),
+            self.performance_counters[2].eq(self.performance_counters[2] + self.power_management.power_down_entered),
+            # ... (add more performance counters as needed)
+        ]
 
         return m
 
@@ -324,7 +435,9 @@ def generate_verilog(config):
     verilog_output = verilog.convert(mem_ctrl, ios={mem_ctrl.clk, mem_ctrl.rst, mem_ctrl.addr, 
                                                     mem_ctrl.data_in, mem_ctrl.data_out, 
                                                     mem_ctrl.mem_write, mem_ctrl.mem_read, 
-                                                    mem_ctrl.ready})  # Convert to Verilog
+                                                    mem_ctrl.ready, mem_ctrl.refresh, 
+                                                    mem_ctrl.chip_select, mem_ctrl.ras, 
+                                                    mem_ctrl.cas, mem_ctrl.we})  # Convert to Verilog
 
     # Write the main Verilog file
     with open('rtl/DDR5_Memory_Controller.v', 'w') as file:
@@ -360,6 +473,75 @@ def validate_config(config):
     
     if config['burst_length'] not in [4, 8, 16]:
         raise ValueError("Burst length must be 4, 8, or 16")
+    
+    if config['address_mapping_scheme'] not in ['linear', 'interleaved']:
+        raise ValueError("Unsupported address mapping scheme")
+    
+    if config['row_buffer_policy'] not in ['open_page', 'close_page']:
+        raise ValueError("Unsupported row buffer policy")
+    
+    if config['bank_groups'] <= 0 or config['banks_per_group'] <= 0:
+        raise ValueError("Bank groups and banks per group must be positive")
+    
+    if config['rows'] <= 0 or config['columns'] <= 0:
+        raise ValueError("Rows and columns must be positive")
+    
+    if config['page_size'] <= 0:
+        raise ValueError("Page size must be positive")
+    
+    # Add validations for timing parameters
+    timing_params = ['tRCD', 'tRP', 'tRAS', 'tRC', 'tWR', 'tRFC']
+    for param in timing_params:
+        if config[param] <= 0:
+            raise ValueError(f"{param} must be positive")
+    
+    if config['scheduling_policy'] not in ['FCFS', 'FR-FCFS']:
+        raise ValueError("Unsupported scheduling policy")
+    
+    if not set(config['power_down_modes']).issubset({'self-refresh', 'power-down', 'deep-power-down'}):
+        raise ValueError("Unsupported power-down modes")
+
+def run_memory_controller_simulation(config):
+    from migen.sim import Simulator, Delay
+
+    def testbench(dut):
+        # Example testbench for simulation
+        yield dut.rst.eq(1)
+        yield Delay(1e-6)
+        yield dut.rst.eq(0)
+        yield dut.mem_write.eq(1)
+        yield dut.addr.eq(0x1000)
+        yield dut.data_in.eq(0xDEADBEEF)
+        yield Delay(1e-6)
+        yield dut.mem_write.eq(0)
+        yield dut.mem_read.eq(1)
+        yield dut.addr.eq(0x1000)
+        yield Delay(1e-6)
+        yield dut.mem_read.eq(0)
+        yield Delay(1e-6)
+        print(f"Read data: {hex((yield dut.data_out))}")
+
+    dut = MemoryController(config)
+    sim = Simulator(dut)
+    sim.add_clock(1e-6)  # 1 MHz clock
+    sim.add_sync_process(testbench)
+    sim.run()
+
+def run_formal_verification(config):
+    from migen.fhdl.verification import assert_, assume, cover
+
+    class FormalMemoryController(MemoryController):
+        def __init__(self, config):
+            super().__init__(config)
+            self.specials += [
+                assert_(self.ready == 1),
+                cover(self.mem_read & (self.data_out == 0xDEADBEEF))
+            ]
+
+    dut = FormalMemoryController(config)
+    from migen.fhdl.verification import Formal
+    f = Formal(dut)
+    f.check()
 
 def main():
     try:
@@ -379,6 +561,14 @@ def main():
 
         generate_verilog(config)
         print("Memory Controller generated successfully.")
+
+        # Add simulation and verification
+        if config['run_simulation']:
+            run_memory_controller_simulation(config)
+
+        if config['run_formal_verification']:
+            run_formal_verification(config)
+
     except FileNotFoundError:
         print(f"Error: Configuration file not found at {config_path}")
     except json.JSONDecodeError:

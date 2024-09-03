@@ -21,6 +21,7 @@ from scripts.rowBufferManager import RowBufferManager
 from scripts.qosManager import QoSManager
 from scripts.eccEncoder import ECCEncoder
 from scripts.eccDecoder import ECCDecoder
+from abc import ABC, abstractmethod  # Add this import
 
 # Function to read configuration from a JSON file
 def read_config(file_path):

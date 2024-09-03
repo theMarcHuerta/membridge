@@ -45,8 +45,8 @@ class CommandScheduler(Module):
                 self.queue[self.bank_group][self.bank].append((self.cmd_in, self.cmd_addr, self.row_buffer_hit)),
                 self.cmd_ready.eq(0)
             ).Else(
-                # Fix: Use a single assignment for the result of find_priority_cmd
-                priority_cmd = find_priority_cmd(),
+                # Fix: Assign priority_cmd before the If statement
+                priority_cmd.eq(find_priority_cmd()),
                 If(priority_cmd[2] is not None,
                     self.cmd_type.eq(priority_cmd[2][0]),
                     self.cmd_addr_out.eq(priority_cmd[2][1]),

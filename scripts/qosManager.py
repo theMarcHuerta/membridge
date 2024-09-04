@@ -2,16 +2,19 @@ from migen import *
 
 class QoSManager(Module):
     def __init__(self, num_requestors, qos_policy):
-        self.clk = Signal()
-        self.rst = Signal()
-        self.request = Signal(num_requestors)
-        self.grant = Signal(num_requestors)
-        self.current_priority = Signal(max=num_requestors)
+        # Input ports
+        self.cmd_executed = Signal()
         self.request_completed = Signal()
-        
+        self.rst = Signal()  # Add reset signal
+
+        # Output ports
+        self.current_priority = Signal(max=num_requestors)
+        self.grant = Signal(num_requestors)  # Add grant signal
+        self.qos_priority = Signal(max=num_requestors)  # Add qos_priority signal
+
         # Internal signals
         self.request_counters = Array([Signal(32) for _ in range(num_requestors)])
-        
+
         # Add QoS logic
         self.sync += [
             If(self.rst,
@@ -28,7 +31,8 @@ class QoSManager(Module):
                 )
             )
         ]
-        
+
         self.comb += [
-            self.grant.eq(1 << self.current_priority)
+            self.grant.eq(1 << self.current_priority),
+            self.qos_priority.eq(self.current_priority)  # Assign current_priority to qos_priority
         ]

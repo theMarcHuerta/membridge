@@ -1,51 +1,57 @@
 /* Machine-generated using Migen */
 module CommandDecoder(
-	input sys_clk,
-	input sys_rst
+
 );
 
-reg commanddecoder_rst = 1'd0;
-reg [31:0] commanddecoder_addr = 32'd0;
-reg commanddecoder_mem_read = 1'd0;
-reg commanddecoder_mem_write = 1'd0;
-reg commanddecoder_activate = 1'd0;
-reg commanddecoder_precharge = 1'd0;
-reg commanddecoder_refresh = 1'd0;
-reg [3:0] commanddecoder_cmd_decoded = 4'd0;
-reg [31:0] commanddecoder_address = 32'd0;
+reg [31:0] addr = 32'd0;
+reg chip_select = 1'd0;
+reg ras = 1'd0;
+reg cas = 1'd0;
+reg we = 1'd0;
+reg [3:0] cmd_decoded;
+wire cmd_valid;
+wire [15:0] row_addr;
+wire [9:0] col_addr;
+wire [2:0] bank_addr;
 
+// synthesis translate_off
+reg dummy_s;
+initial dummy_s <= 1'd0;
+// synthesis translate_on
 
-always @(posedge sys_clk) begin
-	if (commanddecoder_rst) begin
-		commanddecoder_cmd_decoded <= 1'd0;
-		commanddecoder_address <= 1'd0;
-	end else begin
-		commanddecoder_address <= commanddecoder_addr;
-		case ({commanddecoder_refresh, commanddecoder_precharge, commanddecoder_activate, commanddecoder_mem_write, commanddecoder_mem_read})
-			1'd1: begin
-				commanddecoder_cmd_decoded <= 1'd1;
-			end
-			2'd2: begin
-				commanddecoder_cmd_decoded <= 2'd2;
-			end
-			3'd4: begin
-				commanddecoder_cmd_decoded <= 2'd3;
-			end
-			4'd8: begin
-				commanddecoder_cmd_decoded <= 3'd4;
-			end
-			5'd16: begin
-				commanddecoder_cmd_decoded <= 3'd5;
-			end
-			default: begin
-				commanddecoder_cmd_decoded <= 1'd0;
-			end
-		endcase
-	end
-	if (sys_rst) begin
-		commanddecoder_cmd_decoded <= 4'd0;
-		commanddecoder_address <= 32'd0;
-	end
+assign cmd_valid = (chip_select & (~((ras & cas) & we)));
+
+// synthesis translate_off
+reg dummy_d;
+// synthesis translate_on
+always @(*) begin
+	cmd_decoded <= 4'd0;
+	case ({we, cas, ras})
+		1'd0: begin
+			cmd_decoded <= 3'd5;
+		end
+		1'd1: begin
+			cmd_decoded <= 2'd3;
+		end
+		2'd2: begin
+			cmd_decoded <= 2'd2;
+		end
+		2'd3: begin
+			cmd_decoded <= 1'd1;
+		end
+		3'd4: begin
+			cmd_decoded <= 3'd4;
+		end
+		default: begin
+			cmd_decoded <= 1'd0;
+		end
+	endcase
+// synthesis translate_off
+	dummy_d <= dummy_s;
+// synthesis translate_on
 end
+assign row_addr = addr[31:16];
+assign col_addr = addr[15:6];
+assign bank_addr = addr[5:3];
 
 endmodule

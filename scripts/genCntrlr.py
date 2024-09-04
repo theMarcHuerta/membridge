@@ -21,7 +21,7 @@ from scripts.rowBufferManager import RowBufferManager
 from scripts.qosManager import QoSManager
 from scripts.eccEncoder import ECCEncoder
 from scripts.eccDecoder import ECCDecoder
-from abc import ABC, abstractmethod  # Add this import
+from abc import ABC, abstractmethod
 
 # Function to read configuration from a JSON file
 def read_config(file_path):
@@ -118,7 +118,9 @@ class DDR5(MemoryType):
 
 class MemoryController(Module):
     def __init__(self, config):
-        required_params = ['clock_frequency', 'cas_latency', 'data_width', 'burst_length', 'memory_type']
+        self.config = config  # Store the config as an instance attribute
+
+        required_params = ['clock_frequency', 'cas_latency', 'data_width', 'burst_length', 'memory_type', 'num_requestors']
         for param in required_params:
             if param not in config:
                 raise ValueError(f"Missing required parameter: {param}")
@@ -128,6 +130,7 @@ class MemoryController(Module):
         self.data_width = config['data_width']
         self.burst_length = config['burst_length']
         self.memory_type = config['memory_type']
+        self.num_requestors = config['num_requestors']
 
         if self.clock_frequency <= 0:
             raise ValueError("Clock frequency must be positive")
@@ -139,6 +142,8 @@ class MemoryController(Module):
             raise ValueError("Burst length must be 4, 8, or 16")
         if self.memory_type not in ['DDR5']:
             raise ValueError(f"Unsupported memory type: {self.memory_type}")
+        if self.num_requestors <= 0:
+            raise ValueError("num_requestors must be a positive integer")
 
         try:
             if self.memory_type == 'DDR5':
@@ -151,18 +156,25 @@ class MemoryController(Module):
         try:
             timing_params = self.memory_type_obj.get_timing_parameters()
             command_encoding = self.memory_type_obj.get_command_encoding()
-            self.submodules.timing_controller = TimingController(config)
+            self.submodules.timing_controller = TimingController(config, command_encoding)
             self.submodules.command_decoder = CommandDecoder(command_encoding)
+            self.submodules.bank_state_tracker = BankStateTracker(config['bank_groups'], config['banks_per_group'], command_encoding)
         except Exception as e:
             raise RuntimeError(f"Error initializing controller components: {str(e)}")
 
         self.submodules.data_buffer = DataBuffer(config['data_width'], config['burst_length'])
         self.submodules.power_management = PowerManagement(config['power_down_modes'], config['deep_power_down_threshold'])
         self.submodules.refresh_manager = RefreshManager(config['refresh_rate'], config['tRFC'], config['bank_groups'], config['banks_per_group'])
-        self.submodules.bank_state_tracker = BankStateTracker(config['bank_groups'], config['banks_per_group'])
         self.submodules.command_scheduler = CommandScheduler(config['command_queue_depth'], config['scheduling_policy'])
-        self.submodules.row_buffer_manager = RowBufferManager(config['row_buffer_policy'])
+        self.submodules.row_buffer_manager = RowBufferManager(config['row_buffer_policy'], command_encoding)
         self.submodules.qos_manager = QoSManager(config['num_requestors'], config['qos_policy'])
+        self.submodules.address_mapper = AddressMapper(config)
+        self.submodules.access_arbitration = AccessArbitration(config['num_requestors'])
+        self.submodules.clock_domain_crossing = ClockDomainCrossing(config['data_width'])
+
+        if config['ecc_enabled']:
+            self.submodules.ecc_encoder = ECCEncoder(config['data_width'])
+            self.submodules.ecc_decoder = ECCDecoder(config['data_width'])
 
         # Define input signals
         self.clk = Signal()
@@ -182,13 +194,17 @@ class MemoryController(Module):
         self.ready = Signal()
 
         # Internal signals
-        self.cmd_decoded = Signal(4)
-        self.address = Signal(32)
-        self.timer = Signal(32)
-        self.state = Signal(2)
-        self.buffer = Array([Signal(self.data_width) for _ in range(self.burst_length)])
-        self.buffer_index = Signal(max=self.burst_length)
-        self.power_state = Signal(2)
+        cmd_decoded = Signal(4)
+        cmd_valid = Signal()
+        cmd_ready = Signal()
+        cmd_executed = Signal()
+        bank_state = Signal(2)
+        row_buffer_state = Signal()
+        qos_priority = Signal(max=config['num_requestors'])
+        row_addr = Signal(16)
+        col_addr = Signal(10)
+        bank_addr = Signal(3)
+        cmd_grant = Signal()
 
         # Memory array simulating DRAM
         self.mem_array = Array([Signal(self.data_width) for _ in range(1024)])
@@ -259,9 +275,9 @@ class MemoryController(Module):
             self.data_buffer,
             self.power_management,
             MemoryOperations(self),
-            AddressMapper(config),
-            AccessArbitration(self),
-            ClockDomainCrossing(self.data_width),
+            self.address_mapper,
+            self.access_arbitration,
+            self.clock_domain_crossing,
         ]
 
         # Address mapping signals
@@ -303,16 +319,9 @@ class MemoryController(Module):
         self.debug_signals = Signal(32)
         self.performance_counters = Array([Signal(32) for _ in range(8)])
 
-    def elaborate(self, platform):
-        m = Module()
-        
-        # Add all submodules
-        for submodule in self.submodules:
-            m.submodules += submodule
-
-        # Connect signals between modules
-        m.d.comb += [
-            self.command_decoder.rst.eq(self.rst),
+        # Connections
+        self.comb += [
+            # CommandDecoder connections
             self.command_decoder.addr.eq(self.addr),
             self.command_decoder.mem_read.eq(self.mem_read),
             self.command_decoder.mem_write.eq(self.mem_write),
@@ -321,26 +330,86 @@ class MemoryController(Module):
             self.command_decoder.ras.eq(self.ras),
             self.command_decoder.cas.eq(self.cas),
             self.command_decoder.we.eq(self.we),
-            self.timing_controller.rst.eq(self.rst),
-            self.timing_controller.cmd_decoded.eq(self.command_decoder.cmd_decoded),
-            self.data_buffer.rst.eq(self.rst),
-            self.data_buffer.ready.eq(self.timing_controller.ready),
-            self.data_buffer.mem_read.eq(self.mem_read),
-            self.data_buffer.mem_write.eq(self.mem_write),
-            self.data_buffer.data_in.eq(self.data_in_cdc.dst_data),
-            self.data_out.eq(self.data_out_cdc.dst_data),
-            self.power_management.rst.eq(self.rst),
-            self.power_management.cmd_decoded.eq(self.command_decoder.cmd_decoded),
+            cmd_decoded.eq(self.command_decoder.cmd_decoded),
+            cmd_valid.eq(self.command_decoder.cmd_valid),
+            row_addr.eq(self.command_decoder.row_addr),
+            col_addr.eq(self.command_decoder.col_addr),
+            bank_addr.eq(self.command_decoder.bank_addr),
+
+            # TimingController connections
+            self.timing_controller.cmd_decoded.eq(cmd_decoded),
+            self.timing_controller.bank_group.eq(bank_addr[2]),
+            self.timing_controller.bank.eq(bank_addr[:2]),
             self.ready.eq(self.timing_controller.ready),
-            self.refresh_manager.clk.eq(self.clk),
-            self.refresh_manager.rst.eq(self.rst),
-            self.bank_state_tracker.clk.eq(self.clk),
-            self.bank_state_tracker.rst.eq(self.rst),
-            self.command_scheduler.clk.eq(self.clk),
-            self.command_scheduler.rst.eq(self.rst),
-            self.row_buffer_manager.clk.eq(self.clk),
-            self.row_buffer_manager.rst.eq(self.rst),
+
+            # DataBuffer connections
+            self.data_buffer.data_in.eq(self.ecc_decoder.data_out if self.config['ecc_enabled'] else self.data_in),
+            self.data_out.eq(self.ecc_encoder.data_out if self.config['ecc_enabled'] else self.data_buffer.data_out),
+            self.data_buffer.mem_write.eq(self.command_decoder.mem_write),
+            self.data_buffer.mem_read.eq(self.command_decoder.mem_read),
+
+            # PowerManagement connections
+            self.power_management.cmd_decoded.eq(cmd_decoded),
+
+            # RefreshManager connections
+            self.refresh_manager.refresh.eq(self.refresh),
+
+            # BankStateTracker connections
+            self.bank_state_tracker.cmd_decoded.eq(cmd_decoded),
+            self.bank_state_tracker.bank_group.eq(bank_addr[2]),
+            self.bank_state_tracker.bank.eq(bank_addr[:2]),
+            self.bank_state_tracker.row.eq(row_addr),
+            bank_state.eq(self.bank_state_tracker.bank_state),
+
+            # CommandScheduler connections
+            self.command_scheduler.cmd_valid.eq(cmd_valid),
+            self.command_scheduler.cmd_type.eq(cmd_decoded),
+            self.command_scheduler.bank_group.eq(bank_addr[2]),
+            self.command_scheduler.bank.eq(bank_addr[:2]),
+            self.command_scheduler.row.eq(row_addr),
+            self.command_scheduler.col.eq(col_addr),
+            self.command_scheduler.row_buffer_hit.eq(self.row_buffer_manager.row_buffer_hit),
+            cmd_ready.eq(self.command_scheduler.cmd_ready),
+            cmd_executed.eq(self.command_scheduler.cmd_executed),
+
+            # RowBufferManager connections
+            self.row_buffer_manager.cmd_decoded.eq(cmd_decoded),
+            self.row_buffer_manager.bank_group.eq(bank_addr[2]),
+            self.row_buffer_manager.bank.eq(bank_addr[:2]),
+            self.row_buffer_manager.row.eq(row_addr),
+            row_buffer_state.eq(self.row_buffer_manager.row_buffer_hit),
+
+            # QoSManager connections
+            self.qos_manager.cmd_executed.eq(cmd_executed),
+            qos_priority.eq(self.qos_manager.qos_priority),
+
+            # AddressMapper connections
+            self.address_mapper.addr_in.eq(self.addr),
+            row_addr.eq(self.address_mapper.row_addr),
+            col_addr.eq(self.address_mapper.col_addr),
+            bank_addr.eq(self.address_mapper.bank_addr),
+
+            # AccessArbitration connections
+            self.access_arbitration.requests.eq(cmd_ready),
+            cmd_grant.eq(self.access_arbitration.grant),
+
+            # ClockDomainCrossing connections
+            self.clock_domain_crossing.src_data.eq(self.data_buffer.data_out),
+            self.data_out_sync.eq(self.clock_domain_crossing.dst_data),
         ]
+
+        if config['ecc_enabled']:
+            self.comb += [
+                self.ecc_encoder.data_in.eq(self.data_buffer.data_out),
+                self.ecc_decoder.data_in.eq(self.ecc_encoder.data_out),
+            ]
+
+    def elaborate(self, platform):
+        m = Module()
+        
+        # Add all submodules
+        for submodule in self.submodules:
+            m.submodules += submodule
 
         # Implement main control logic
         with m.FSM(name="main_control"):
@@ -386,46 +455,99 @@ class MemoryController(Module):
                 m.next = "IDLE"
 
             with m.State("THERMAL_MANAGEMENT"):
-                with m.If(self.temperature > config['thermal_shutdown_temp']):
+                with m.If(self.temperature > self.config['thermal_shutdown_temp']):
                     m.d.comb += self.thermal_shutdown.eq(1)
                     m.next = "POWER_DOWN"
                 with m.Else():
                     m.next = "IDLE"
 
-        # Implement QoS-aware command scheduling
+        # Implement connections
         m.d.comb += [
-            self.command_scheduler.qos_priority.eq(self.qos_manager.current_priority),
-            self.qos_manager.request_completed.eq(self.command_scheduler.cmd_executed)
+            # CommandDecoder connections
+            self.command_decoder.addr.eq(self.addr),
+            self.command_decoder.mem_read.eq(self.mem_read),
+            self.command_decoder.mem_write.eq(self.mem_write),
+            self.command_decoder.refresh.eq(self.refresh),
+            self.command_decoder.chip_select.eq(self.chip_select),
+            self.command_decoder.ras.eq(self.ras),
+            self.command_decoder.cas.eq(self.cas),
+            self.command_decoder.we.eq(self.we),
+            self.cmd_decoded.eq(self.command_decoder.cmd_decoded),
+            self.cmd_valid.eq(self.command_decoder.cmd_valid),
+            self.row_addr.eq(self.command_decoder.row_addr),
+            self.col_addr.eq(self.command_decoder.col_addr),
+            self.bank_addr.eq(self.command_decoder.bank_addr),
+
+            # TimingController connections
+            self.timing_controller.cmd_decoded.eq(self.cmd_decoded),
+            self.timing_controller.bank_group.eq(self.bank_addr[2]),
+            self.timing_controller.bank.eq(self.bank_addr[:2]),
+            self.ready.eq(self.timing_controller.ready),
+
+            # DataBuffer connections
+            self.data_buffer.data_in.eq(self.ecc_decoder.data_out if self.config['ecc_enabled'] else self.data_in),
+            self.data_out.eq(self.ecc_encoder.data_out if self.config['ecc_enabled'] else self.data_buffer.data_out),
+            self.data_buffer.mem_write.eq(self.command_decoder.mem_write),
+            self.data_buffer.mem_read.eq(self.command_decoder.mem_read),
+
+            # PowerManagement connections
+            self.power_management.cmd_decoded.eq(self.cmd_decoded),
+
+            # RefreshManager connections
+            self.refresh_manager.refresh.eq(self.refresh),
+
+            # BankStateTracker connections
+            self.bank_state_tracker.cmd_decoded.eq(self.cmd_decoded),
+            self.bank_state_tracker.bank_group.eq(self.bank_addr[2]),
+            self.bank_state_tracker.bank.eq(self.bank_addr[:2]),
+            self.bank_state_tracker.row.eq(self.row_addr),
+            self.bank_state.eq(self.bank_state_tracker.bank_state),
+
+            # CommandScheduler connections
+            self.command_scheduler.cmd_valid.eq(self.cmd_valid),
+            self.command_scheduler.cmd_type.eq(self.cmd_decoded),
+            self.command_scheduler.bank_group.eq(self.bank_addr[2]),
+            self.command_scheduler.bank.eq(self.bank_addr[:2]),
+            self.command_scheduler.row.eq(self.row_addr),
+            self.command_scheduler.col.eq(self.col_addr),
+            self.command_scheduler.row_buffer_hit.eq(self.row_buffer_manager.row_buffer_hit),
+            self.cmd_ready.eq(self.command_scheduler.cmd_ready),
+            self.cmd_executed.eq(self.command_scheduler.cmd_executed),
+
+            # RowBufferManager connections
+            self.row_buffer_manager.cmd_decoded.eq(self.cmd_decoded),
+            self.row_buffer_manager.bank_group.eq(self.bank_addr[2]),
+            self.row_buffer_manager.bank.eq(self.bank_addr[:2]),
+            self.row_buffer_manager.row.eq(self.row_addr),
+            self.row_buffer_state.eq(self.row_buffer_manager.row_buffer_hit),
+
+            # QoSManager connections
+            self.qos_manager.cmd_executed.eq(self.cmd_executed),
+            self.qos_priority.eq(self.qos_manager.qos_priority),
+
+            # AddressMapper connections
+            self.address_mapper.addr_in.eq(self.addr),
+            self.row_addr.eq(self.address_mapper.row_addr),
+            self.col_addr.eq(self.address_mapper.col_addr),
+            self.bank_addr.eq(self.address_mapper.bank_addr),
+
+            # AccessArbitration connections
+            self.access_arbitration.requests.eq(self.cmd_ready),
+            self.cmd_grant.eq(self.access_arbitration.grant),
+
+            # ClockDomainCrossing connections
+            self.clock_domain_crossing.src_data.eq(self.data_buffer.data_out),
+            self.data_out_sync.eq(self.clock_domain_crossing.dst_data),
         ]
 
-        # Implement per-bank refresh logic
-        m.d.comb += [
-            self.refresh_manager.bank_group.eq(self.bank_group),
-            self.refresh_manager.bank.eq(self.bank)
-        ]
-
-        # Implement advanced power management
-        m.d.comb += [
-            self.power_management.temperature.eq(self.temperature),
-            self.low_power_mode.eq(self.power_management.low_power_mode)
-        ]
-
-        # Implement ECC
-        if self.ecc_enabled:
+        if self.config['ecc_enabled']:
             m.d.comb += [
-                self.ecc_encoder.data_in.eq(self.data_in),
-                self.data_buffer.data_in.eq(self.ecc_encoder.data_out)
+                self.ecc_encoder.data_in.eq(self.data_buffer.data_out),
+                self.ecc_decoder.data_in.eq(self.ecc_encoder.data_out),
             ]
 
-        # Implement debug and performance monitoring
-        m.d.sync += [
-            self.performance_counters[0].eq(self.performance_counters[0] + self.command_scheduler.cmd_executed),
-            self.performance_counters[1].eq(self.performance_counters[1] + self.refresh_manager.refresh_done),
-            self.performance_counters[2].eq(self.performance_counters[2] + self.power_management.power_down_entered),
-            # ... (add more performance counters as needed)
-        ]
-
         return m
+
 
 # Function to generate Verilog code from the MemoryController module
 def generate_verilog(config):
@@ -440,17 +562,17 @@ def generate_verilog(config):
 
     # Convert submodules
     submodules = [
-        ('TimingController', TimingController(config)),
+        ('TimingController', TimingController(config, mem_ctrl.memory_type_obj.get_command_encoding())),
         ('CommandDecoder', CommandDecoder(mem_ctrl.memory_type_obj.get_command_encoding())),
+        ('BankStateTracker', BankStateTracker(config['bank_groups'], config['banks_per_group'], mem_ctrl.memory_type_obj.get_command_encoding())),
         ('DataBuffer', DataBuffer(config['data_width'], config['burst_length'])),
         ('PowerManagement', PowerManagement(config['power_down_modes'], config['deep_power_down_threshold'])),
         ('RefreshManager', RefreshManager(config['refresh_rate'], config['tRFC'], config['bank_groups'], config['banks_per_group'])),
-        ('BankStateTracker', BankStateTracker(config['bank_groups'], config['banks_per_group'])),
         ('CommandScheduler', CommandScheduler(config['command_queue_depth'], config['scheduling_policy'])),
-        ('RowBufferManager', RowBufferManager(config['row_buffer_policy'])),
+        ('RowBufferManager', RowBufferManager(config['row_buffer_policy'], mem_ctrl.memory_type_obj.get_command_encoding())),
         ('QoSManager', QoSManager(config['num_requestors'], config['qos_policy'])),
         ('AddressMapper', AddressMapper(config)),
-        ('AccessArbitration', AccessArbitration(mem_ctrl)),
+        ('AccessArbitration', AccessArbitration(config['num_requestors'])),
         ('ClockDomainCrossing', ClockDomainCrossing(config['data_width'])),
     ]
 

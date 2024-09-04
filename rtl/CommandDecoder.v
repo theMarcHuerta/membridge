@@ -1,18 +1,20 @@
 /* Machine-generated using Migen */
 module CommandDecoder(
-
+	input [31:0] addr,
+	input mem_read,
+	input mem_write,
+	input refresh,
+	input chip_select,
+	input ras,
+	input cas,
+	input we,
+	output reg [3:0] cmd_decoded,
+	output cmd_valid,
+	output [15:0] row_addr,
+	output [9:0] col_addr,
+	output [2:0] bank_addr
 );
 
-reg [31:0] addr = 32'd0;
-reg chip_select = 1'd0;
-reg ras = 1'd0;
-reg cas = 1'd0;
-reg we = 1'd0;
-reg [3:0] cmd_decoded;
-wire cmd_valid;
-wire [15:0] row_addr;
-wire [9:0] col_addr;
-wire [2:0] bank_addr;
 
 // synthesis translate_off
 reg dummy_s;
@@ -28,19 +30,19 @@ always @(*) begin
 	cmd_decoded <= 4'd0;
 	case ({we, cas, ras})
 		1'd0: begin
-			cmd_decoded <= 3'd5;
+			cmd_decoded <= 1'd1;
 		end
 		1'd1: begin
 			cmd_decoded <= 2'd3;
 		end
 		2'd2: begin
-			cmd_decoded <= 2'd2;
+			cmd_decoded <= 3'd4;
 		end
 		2'd3: begin
-			cmd_decoded <= 1'd1;
+			cmd_decoded <= 3'd5;
 		end
 		3'd4: begin
-			cmd_decoded <= 3'd4;
+			cmd_decoded <= 2'd2;
 		end
 		default: begin
 			cmd_decoded <= 1'd0;

@@ -1,15 +1,15 @@
 /* Machine-generated using Migen */
 module DataBuffer(
+	input rst,
+	input ready,
+	input mem_write,
+	input mem_read,
+	input [63:0] data_in,
+	output reg [63:0] data_out,
 	input sys_clk,
 	input sys_rst
 );
 
-reg databuffer_rst = 1'd0;
-reg databuffer_ready = 1'd0;
-reg databuffer_mem_write = 1'd0;
-reg databuffer_mem_read = 1'd0;
-reg [63:0] databuffer_data_in = 64'd0;
-reg [63:0] databuffer_data_out = 64'd0;
 reg databuffer_write_fifo_syncfifo_we = 1'd0;
 wire databuffer_write_fifo_syncfifo_writable;
 reg databuffer_write_fifo_syncfifo_re = 1'd0;
@@ -96,17 +96,17 @@ assign databuffer_read_fifo_syncfifo_writable = (databuffer_read_fifo_level != 4
 assign databuffer_read_fifo_syncfifo_readable = (databuffer_read_fifo_level != 1'd0);
 
 always @(posedge sys_clk) begin
-	if (databuffer_rst) begin
+	if (rst) begin
 		databuffer_write_fifo_syncfifo_we <= 1'd0;
 		databuffer_read_fifo_syncfifo_re <= 1'd0;
 	end else begin
-		if (databuffer_ready) begin
-			if (databuffer_mem_write) begin
-				databuffer_write_fifo_syncfifo_din <= databuffer_data_in;
+		if (ready) begin
+			if (mem_write) begin
+				databuffer_write_fifo_syncfifo_din <= data_in;
 				databuffer_write_fifo_syncfifo_we <= 1'd1;
 			end else begin
-				if (databuffer_mem_read) begin
-					databuffer_data_out <= databuffer_read_fifo_syncfifo_dout;
+				if (mem_read) begin
+					data_out <= databuffer_read_fifo_syncfifo_dout;
 					databuffer_read_fifo_syncfifo_re <= 1'd1;
 				end else begin
 					databuffer_write_fifo_syncfifo_we <= 1'd0;
@@ -146,7 +146,7 @@ always @(posedge sys_clk) begin
 		end
 	end
 	if (sys_rst) begin
-		databuffer_data_out <= 64'd0;
+		data_out <= 64'd0;
 		databuffer_write_fifo_syncfifo_we <= 1'd0;
 		databuffer_write_fifo_level <= 4'd0;
 		databuffer_write_fifo_produce <= 3'd0;

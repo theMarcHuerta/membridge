@@ -1154,19 +1154,19 @@ always @(*) begin
 	command_decoder_cmd_decoded <= 4'd0;
 	case ({command_decoder_we, command_decoder_cas, command_decoder_ras})
 		1'd0: begin
-			command_decoder_cmd_decoded <= 3'd5;
+			command_decoder_cmd_decoded <= 1'd1;
 		end
 		1'd1: begin
 			command_decoder_cmd_decoded <= 2'd3;
 		end
 		2'd2: begin
-			command_decoder_cmd_decoded <= 2'd2;
+			command_decoder_cmd_decoded <= 3'd4;
 		end
 		2'd3: begin
-			command_decoder_cmd_decoded <= 1'd1;
+			command_decoder_cmd_decoded <= 3'd5;
 		end
 		3'd4: begin
-			command_decoder_cmd_decoded <= 3'd4;
+			command_decoder_cmd_decoded <= 2'd2;
 		end
 		default: begin
 			command_decoder_cmd_decoded <= 1'd0;

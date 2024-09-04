@@ -556,7 +556,11 @@ def generate_verilog(config):
     mem_ctrl = MemoryController(config)
     
     # Convert the main MemoryController
-    verilog_output = verilog.convert(mem_ctrl, name="DDR5_Memory_Controller", ios={mem_ctrl.clk, mem_ctrl.rst, mem_ctrl.addr, mem_ctrl.data_in, mem_ctrl.data_out, mem_ctrl.mem_write, mem_ctrl.mem_read, mem_ctrl.ready})
+    verilog_output = verilog.convert(
+        mem_ctrl, 
+        name="DDR5_Memory_Controller", 
+        ios={mem_ctrl.clk, mem_ctrl.rst, mem_ctrl.addr, mem_ctrl.data_in, mem_ctrl.data_out, mem_ctrl.mem_write, mem_ctrl.mem_read, mem_ctrl.ready}
+    )
     with open('rtl/DDR5_Memory_Controller.v', 'w') as f:
         f.write(verilog_output.main_source)
 
@@ -583,7 +587,38 @@ def generate_verilog(config):
         ])
 
     for name, module in submodules:
-        verilog_output = verilog.convert(module, name=name)
+        if name == 'TimingController':
+            ios = {module.cmd_decoded, module.bank_group, module.bank, module.ready}
+        elif name == 'CommandDecoder':
+            ios = {module.addr, module.mem_read, module.mem_write, module.refresh, module.chip_select, module.ras, module.cas, module.we, module.cmd_decoded, module.cmd_valid, module.row_addr, module.col_addr, module.bank_addr}
+        elif name == 'BankStateTracker':
+            ios = {module.cmd_decoded, module.bank_group, module.bank, module.row, module.bank_state, module.active_row}
+        elif name == 'DataBuffer':
+            ios = {module.rst, module.ready, module.mem_write, module.mem_read, module.data_in, module.data_out}
+        elif name == 'PowerManagement':
+            ios = {module.clk, module.rst, module.cmd_decoded, module.power_state, module.enter_power_down, module.power_down_entered, module.power_down_ready, module.temperature, module.low_power_mode}
+        elif name == 'RefreshManager':
+            ios = {module.refresh, module.bank_group, module.bank, module.refresh_needed, module.refresh_done}
+        elif name == 'CommandScheduler':
+            ios = {module.cmd_valid, module.cmd_type, module.bank_group, module.bank, module.row, module.col, module.row_buffer_hit, module.cmd_ready, module.cmd_executed, module.scheduled_cmd_type, module.scheduled_bank_group, module.scheduled_bank, module.scheduled_row, module.scheduled_col}
+        elif name == 'RowBufferManager':
+            ios = {module.cmd_decoded, module.bank_group, module.bank, module.row, module.row_buffer_hit, module.row_activate, module.row_precharge}
+        elif name == 'QoSManager':
+            ios = {module.cmd_executed, module.request_completed, module.rst, module.current_priority, module.grant, module.qos_priority}
+        elif name == 'AddressMapper':
+            ios = {module.addr_in, module.row_addr, module.col_addr, module.bank_group_addr, module.bank_addr}
+        elif name == 'AccessArbitration':
+            ios = {module.requests, module.grant}
+        elif name == 'ClockDomainCrossing':
+            ios = {module.src_clk, module.src_rst, module.src_data, module.dst_clk, module.dst_rst, module.dst_data}
+        elif name == 'ECCEncoder':
+            ios = {module.data_in, module.data_out}
+        elif name == 'ECCDecoder':
+            ios = {module.data_in, module.data_out, module.error_detected}
+        else:
+            ios = set()
+
+        verilog_output = verilog.convert(module, name=name, ios=ios)
         with open(f'rtl/{name}.v', 'w') as f:
             f.write(verilog_output.main_source)
 

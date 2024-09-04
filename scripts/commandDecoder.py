@@ -1,7 +1,7 @@
 from migen import *
 
 class CommandDecoder(Module):
-    def __init__(self):
+    def __init__(self, command_encoding):
         # Define input and output ports
         self.addr = Signal(32)
         self.mem_read = Signal()
@@ -18,14 +18,8 @@ class CommandDecoder(Module):
         self.col_addr = Signal(10)
         self.bank_addr = Signal(3)
 
-        # Command decoding logic
-        self.command_encoding = {
-            'READ': 0b0001,
-            'WRITE': 0b0010,
-            'ACTIVATE': 0b0011,
-            'PRECHARGE': 0b0100,
-            'REFRESH': 0b0101,
-        }
+        # Store command encoding
+        self.command_encoding = command_encoding
 
         # Add command decoding logic
         self.comb += [

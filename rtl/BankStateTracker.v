@@ -1,15 +1,15 @@
 /* Machine-generated using Migen */
 module BankStateTracker(
+	input [3:0] cmd_decoded,
+	input [1:0] bank_group,
+	input [1:0] bank,
+	input [15:0] row,
+	output [1:0] bank_state,
+	output [15:0] active_row,
 	input sys_clk,
 	input sys_rst
 );
 
-reg [3:0] bankstatetracker_cmd_decoded = 4'd0;
-reg [1:0] bankstatetracker_bank_group = 2'd0;
-reg [1:0] bankstatetracker_bank = 2'd0;
-reg [15:0] bankstatetracker_row = 16'd0;
-wire [1:0] bankstatetracker_bank_state;
-wire [15:0] bankstatetracker_active_row;
 reg [1:0] bankstatetracker0 = 2'd0;
 reg [1:0] bankstatetracker1 = 2'd0;
 reg [1:0] bankstatetracker2 = 2'd0;
@@ -83,15 +83,15 @@ reg dummy_s;
 initial dummy_s <= 1'd0;
 // synthesis translate_on
 
-assign bankstatetracker_bank_state = comb_array_muxed0;
-assign bankstatetracker_active_row = comb_array_muxed5;
+assign bank_state = comb_array_muxed0;
+assign active_row = comb_array_muxed5;
 
 // synthesis translate_off
 reg dummy_d;
 // synthesis translate_on
 always @(*) begin
 	comb_array_muxed1 <= 2'd0;
-	case (bankstatetracker_bank)
+	case (bank)
 		1'd0: begin
 			comb_array_muxed1 <= bankstatetracker0;
 		end
@@ -115,7 +115,7 @@ reg dummy_d_1;
 // synthesis translate_on
 always @(*) begin
 	comb_array_muxed2 <= 2'd0;
-	case (bankstatetracker_bank)
+	case (bank)
 		1'd0: begin
 			comb_array_muxed2 <= bankstatetracker4;
 		end
@@ -139,7 +139,7 @@ reg dummy_d_2;
 // synthesis translate_on
 always @(*) begin
 	comb_array_muxed3 <= 2'd0;
-	case (bankstatetracker_bank)
+	case (bank)
 		1'd0: begin
 			comb_array_muxed3 <= bankstatetracker8;
 		end
@@ -163,7 +163,7 @@ reg dummy_d_3;
 // synthesis translate_on
 always @(*) begin
 	comb_array_muxed4 <= 2'd0;
-	case (bankstatetracker_bank)
+	case (bank)
 		1'd0: begin
 			comb_array_muxed4 <= bankstatetracker12;
 		end
@@ -187,7 +187,7 @@ reg dummy_d_4;
 // synthesis translate_on
 always @(*) begin
 	comb_array_muxed0 <= 2'd0;
-	case (bankstatetracker_bank_group)
+	case (bank_group)
 		1'd0: begin
 			comb_array_muxed0 <= comb_array_muxed1;
 		end
@@ -211,7 +211,7 @@ reg dummy_d_5;
 // synthesis translate_on
 always @(*) begin
 	comb_array_muxed6 <= 16'd0;
-	case (bankstatetracker_bank)
+	case (bank)
 		1'd0: begin
 			comb_array_muxed6 <= bankstatetracker16;
 		end
@@ -235,7 +235,7 @@ reg dummy_d_6;
 // synthesis translate_on
 always @(*) begin
 	comb_array_muxed7 <= 16'd0;
-	case (bankstatetracker_bank)
+	case (bank)
 		1'd0: begin
 			comb_array_muxed7 <= bankstatetracker20;
 		end
@@ -259,7 +259,7 @@ reg dummy_d_7;
 // synthesis translate_on
 always @(*) begin
 	comb_array_muxed8 <= 16'd0;
-	case (bankstatetracker_bank)
+	case (bank)
 		1'd0: begin
 			comb_array_muxed8 <= bankstatetracker24;
 		end
@@ -283,7 +283,7 @@ reg dummy_d_8;
 // synthesis translate_on
 always @(*) begin
 	comb_array_muxed9 <= 16'd0;
-	case (bankstatetracker_bank)
+	case (bank)
 		1'd0: begin
 			comb_array_muxed9 <= bankstatetracker28;
 		end
@@ -307,7 +307,7 @@ reg dummy_d_9;
 // synthesis translate_on
 always @(*) begin
 	comb_array_muxed5 <= 16'd0;
-	case (bankstatetracker_bank_group)
+	case (bank_group)
 		1'd0: begin
 			comb_array_muxed5 <= comb_array_muxed6;
 		end
@@ -327,13 +327,13 @@ always @(*) begin
 end
 
 always @(posedge sys_clk) begin
-	case (bankstatetracker_cmd_decoded)
+	case (cmd_decoded)
 		2'd2: begin
 			sync_array_muxed10 = 1'd0;
-			case (bankstatetracker_bank_group)
+			case (bank_group)
 				1'd0: begin
 					sync_array_muxed11 = sync_array_muxed10;
-					case (bankstatetracker_bank)
+					case (bank)
 						1'd0: begin
 							bankstatetracker0 <= sync_array_muxed11;
 						end
@@ -350,7 +350,7 @@ always @(posedge sys_clk) begin
 				end
 				1'd1: begin
 					sync_array_muxed12 = sync_array_muxed10;
-					case (bankstatetracker_bank)
+					case (bank)
 						1'd0: begin
 							bankstatetracker4 <= sync_array_muxed12;
 						end
@@ -367,7 +367,7 @@ always @(posedge sys_clk) begin
 				end
 				2'd2: begin
 					sync_array_muxed13 = sync_array_muxed10;
-					case (bankstatetracker_bank)
+					case (bank)
 						1'd0: begin
 							bankstatetracker8 <= sync_array_muxed13;
 						end
@@ -384,7 +384,7 @@ always @(posedge sys_clk) begin
 				end
 				default: begin
 					sync_array_muxed14 = sync_array_muxed10;
-					case (bankstatetracker_bank)
+					case (bank)
 						1'd0: begin
 							bankstatetracker12 <= sync_array_muxed14;
 						end
@@ -403,10 +403,10 @@ always @(posedge sys_clk) begin
 		end
 		2'd3: begin
 			sync_array_muxed0 = 1'd1;
-			case (bankstatetracker_bank_group)
+			case (bank_group)
 				1'd0: begin
 					sync_array_muxed1 = sync_array_muxed0;
-					case (bankstatetracker_bank)
+					case (bank)
 						1'd0: begin
 							bankstatetracker0 <= sync_array_muxed1;
 						end
@@ -423,7 +423,7 @@ always @(posedge sys_clk) begin
 				end
 				1'd1: begin
 					sync_array_muxed2 = sync_array_muxed0;
-					case (bankstatetracker_bank)
+					case (bank)
 						1'd0: begin
 							bankstatetracker4 <= sync_array_muxed2;
 						end
@@ -440,7 +440,7 @@ always @(posedge sys_clk) begin
 				end
 				2'd2: begin
 					sync_array_muxed3 = sync_array_muxed0;
-					case (bankstatetracker_bank)
+					case (bank)
 						1'd0: begin
 							bankstatetracker8 <= sync_array_muxed3;
 						end
@@ -457,7 +457,7 @@ always @(posedge sys_clk) begin
 				end
 				default: begin
 					sync_array_muxed4 = sync_array_muxed0;
-					case (bankstatetracker_bank)
+					case (bank)
 						1'd0: begin
 							bankstatetracker12 <= sync_array_muxed4;
 						end
@@ -473,11 +473,11 @@ always @(posedge sys_clk) begin
 					endcase
 				end
 			endcase
-			sync_array_muxed5 = bankstatetracker_row;
-			case (bankstatetracker_bank_group)
+			sync_array_muxed5 = row;
+			case (bank_group)
 				1'd0: begin
 					sync_array_muxed6 = sync_array_muxed5;
-					case (bankstatetracker_bank)
+					case (bank)
 						1'd0: begin
 							bankstatetracker16 <= sync_array_muxed6;
 						end
@@ -494,7 +494,7 @@ always @(posedge sys_clk) begin
 				end
 				1'd1: begin
 					sync_array_muxed7 = sync_array_muxed5;
-					case (bankstatetracker_bank)
+					case (bank)
 						1'd0: begin
 							bankstatetracker20 <= sync_array_muxed7;
 						end
@@ -511,7 +511,7 @@ always @(posedge sys_clk) begin
 				end
 				2'd2: begin
 					sync_array_muxed8 = sync_array_muxed5;
-					case (bankstatetracker_bank)
+					case (bank)
 						1'd0: begin
 							bankstatetracker24 <= sync_array_muxed8;
 						end
@@ -528,7 +528,7 @@ always @(posedge sys_clk) begin
 				end
 				default: begin
 					sync_array_muxed9 = sync_array_muxed5;
-					case (bankstatetracker_bank)
+					case (bank)
 						1'd0: begin
 							bankstatetracker28 <= sync_array_muxed9;
 						end
@@ -547,10 +547,10 @@ always @(posedge sys_clk) begin
 		end
 		3'd4: begin
 			sync_array_muxed20 = 2'd3;
-			case (bankstatetracker_bank_group)
+			case (bank_group)
 				1'd0: begin
 					sync_array_muxed21 = sync_array_muxed20;
-					case (bankstatetracker_bank)
+					case (bank)
 						1'd0: begin
 							bankstatetracker0 <= sync_array_muxed21;
 						end
@@ -567,7 +567,7 @@ always @(posedge sys_clk) begin
 				end
 				1'd1: begin
 					sync_array_muxed22 = sync_array_muxed20;
-					case (bankstatetracker_bank)
+					case (bank)
 						1'd0: begin
 							bankstatetracker4 <= sync_array_muxed22;
 						end
@@ -584,7 +584,7 @@ always @(posedge sys_clk) begin
 				end
 				2'd2: begin
 					sync_array_muxed23 = sync_array_muxed20;
-					case (bankstatetracker_bank)
+					case (bank)
 						1'd0: begin
 							bankstatetracker8 <= sync_array_muxed23;
 						end
@@ -601,7 +601,7 @@ always @(posedge sys_clk) begin
 				end
 				default: begin
 					sync_array_muxed24 = sync_array_muxed20;
-					case (bankstatetracker_bank)
+					case (bank)
 						1'd0: begin
 							bankstatetracker12 <= sync_array_muxed24;
 						end
@@ -620,10 +620,10 @@ always @(posedge sys_clk) begin
 		end
 		3'd5: begin
 			sync_array_muxed15 = 2'd2;
-			case (bankstatetracker_bank_group)
+			case (bank_group)
 				1'd0: begin
 					sync_array_muxed16 = sync_array_muxed15;
-					case (bankstatetracker_bank)
+					case (bank)
 						1'd0: begin
 							bankstatetracker0 <= sync_array_muxed16;
 						end
@@ -640,7 +640,7 @@ always @(posedge sys_clk) begin
 				end
 				1'd1: begin
 					sync_array_muxed17 = sync_array_muxed15;
-					case (bankstatetracker_bank)
+					case (bank)
 						1'd0: begin
 							bankstatetracker4 <= sync_array_muxed17;
 						end
@@ -657,7 +657,7 @@ always @(posedge sys_clk) begin
 				end
 				2'd2: begin
 					sync_array_muxed18 = sync_array_muxed15;
-					case (bankstatetracker_bank)
+					case (bank)
 						1'd0: begin
 							bankstatetracker8 <= sync_array_muxed18;
 						end
@@ -674,7 +674,7 @@ always @(posedge sys_clk) begin
 				end
 				default: begin
 					sync_array_muxed19 = sync_array_muxed15;
-					case (bankstatetracker_bank)
+					case (bank)
 						1'd0: begin
 							bankstatetracker12 <= sync_array_muxed19;
 						end

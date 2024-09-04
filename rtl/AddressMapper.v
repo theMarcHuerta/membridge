@@ -1,13 +1,12 @@
 /* Machine-generated using Migen */
 module AddressMapper(
-
+	input [31:0] addr_in,
+	output [15:0] row_addr,
+	output [9:0] col_addr,
+	output [1:0] bank_group_addr,
+	output [1:0] bank_addr
 );
 
-reg [31:0] addr_in = 32'd0;
-wire [15:0] row_addr;
-wire [9:0] col_addr;
-wire [1:0] bank_group_addr;
-wire [1:0] bank_addr;
 
 // synthesis translate_off
 reg dummy_s;

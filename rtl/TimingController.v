@@ -1,13 +1,13 @@
 /* Machine-generated using Migen */
 module TimingController(
+	input [3:0] cmd_decoded,
+	input [1:0] bank_group,
+	input [1:0] bank,
+	output reg ready,
 	input sys_clk,
 	input sys_rst
 );
 
-reg [3:0] timingcontroller_cmd_decoded = 4'd0;
-reg [1:0] timingcontroller_bank_group = 2'd0;
-reg [1:0] timingcontroller_bank = 2'd0;
-reg timingcontroller_ready = 1'd0;
 reg [31:0] timingcontroller0 = 32'd0;
 reg [31:0] timingcontroller1 = 32'd0;
 reg [31:0] timingcontroller2 = 32'd0;
@@ -44,7 +44,7 @@ reg dummy_d;
 // synthesis translate_on
 always @(*) begin
 	basiclowerer_array_muxed0 <= 32'd0;
-	case (((timingcontroller_bank_group * 2'd2) + timingcontroller_bank))
+	case (((bank_group * 2'd2) + bank))
 		1'd0: begin
 			basiclowerer_array_muxed0 <= timingcontroller0;
 		end
@@ -104,7 +104,7 @@ reg dummy_d_1;
 // synthesis translate_on
 always @(*) begin
 	basiclowerer_array_muxed1 <= 32'd0;
-	case (((timingcontroller_bank_group * 2'd2) + timingcontroller_bank))
+	case (((bank_group * 2'd2) + bank))
 		1'd0: begin
 			basiclowerer_array_muxed1 <= timingcontroller0;
 		end
@@ -164,7 +164,7 @@ reg dummy_d_2;
 // synthesis translate_on
 always @(*) begin
 	basiclowerer_array_muxed2 <= 32'd0;
-	case (((timingcontroller_bank_group * 2'd2) + timingcontroller_bank))
+	case (((bank_group * 2'd2) + bank))
 		1'd0: begin
 			basiclowerer_array_muxed2 <= timingcontroller0;
 		end
@@ -224,7 +224,7 @@ reg dummy_d_3;
 // synthesis translate_on
 always @(*) begin
 	basiclowerer_array_muxed3 <= 32'd0;
-	case (((timingcontroller_bank_group * 2'd2) + timingcontroller_bank))
+	case (((bank_group * 2'd2) + bank))
 		1'd0: begin
 			basiclowerer_array_muxed3 <= timingcontroller0;
 		end
@@ -280,10 +280,10 @@ always @(*) begin
 end
 
 always @(posedge sys_clk) begin
-	if ((timingcontroller_cmd_decoded != 1'd0)) begin
-		case (timingcontroller_cmd_decoded)
+	if ((cmd_decoded != 1'd0)) begin
+		case (cmd_decoded)
 			1'd1: begin
-				timingcontroller_ready <= 1'd0;
+				ready <= 1'd0;
 				timingcontroller0 <= 6'd50;
 				timingcontroller1 <= 6'd50;
 				timingcontroller2 <= 6'd50;
@@ -303,9 +303,9 @@ always @(posedge sys_clk) begin
 			end
 			2'd2: begin
 				if ((basiclowerer_array_muxed3 == 1'd0)) begin
-					timingcontroller_ready <= 1'd1;
+					ready <= 1'd1;
 					t_array_muxed3 = 5'd18;
-					case (((timingcontroller_bank_group * 2'd2) + timingcontroller_bank))
+					case (((bank_group * 2'd2) + bank))
 						1'd0: begin
 							timingcontroller0 <= t_array_muxed3;
 						end
@@ -356,14 +356,14 @@ always @(posedge sys_clk) begin
 						end
 					endcase
 				end else begin
-					timingcontroller_ready <= 1'd0;
+					ready <= 1'd0;
 				end
 			end
 			2'd3: begin
 				if ((basiclowerer_array_muxed2 == 1'd0)) begin
-					timingcontroller_ready <= 1'd1;
+					ready <= 1'd1;
 					t_array_muxed2 = 6'd32;
-					case (((timingcontroller_bank_group * 2'd2) + timingcontroller_bank))
+					case (((bank_group * 2'd2) + bank))
 						1'd0: begin
 							timingcontroller0 <= t_array_muxed2;
 						end
@@ -414,14 +414,14 @@ always @(posedge sys_clk) begin
 						end
 					endcase
 				end else begin
-					timingcontroller_ready <= 1'd0;
+					ready <= 1'd0;
 				end
 			end
 			3'd4: begin
 				if ((basiclowerer_array_muxed1 == 1'd0)) begin
-					timingcontroller_ready <= 1'd1;
+					ready <= 1'd1;
 					t_array_muxed1 = 5'd20;
-					case (((timingcontroller_bank_group * 2'd2) + timingcontroller_bank))
+					case (((bank_group * 2'd2) + bank))
 						1'd0: begin
 							timingcontroller0 <= t_array_muxed1;
 						end
@@ -472,14 +472,14 @@ always @(posedge sys_clk) begin
 						end
 					endcase
 				end else begin
-					timingcontroller_ready <= 1'd0;
+					ready <= 1'd0;
 				end
 			end
 			3'd5: begin
 				if ((basiclowerer_array_muxed0 == 1'd0)) begin
-					timingcontroller_ready <= 1'd1;
+					ready <= 1'd1;
 					t_array_muxed0 = 5'd18;
-					case (((timingcontroller_bank_group * 2'd2) + timingcontroller_bank))
+					case (((bank_group * 2'd2) + bank))
 						1'd0: begin
 							timingcontroller0 <= t_array_muxed0;
 						end
@@ -530,7 +530,7 @@ always @(posedge sys_clk) begin
 						end
 					endcase
 				end else begin
-					timingcontroller_ready <= 1'd0;
+					ready <= 1'd0;
 				end
 			end
 		endcase
@@ -585,7 +585,7 @@ always @(posedge sys_clk) begin
 		end
 	end
 	if (sys_rst) begin
-		timingcontroller_ready <= 1'd0;
+		ready <= 1'd0;
 		timingcontroller0 <= 32'd0;
 		timingcontroller1 <= 32'd0;
 		timingcontroller2 <= 32'd0;

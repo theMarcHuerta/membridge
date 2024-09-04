@@ -1,22 +1,23 @@
 /* Machine-generated using Migen */
 module CommandScheduler(
+	input cmd_valid,
+	input [3:0] cmd_type,
+	input [1:0] bank_group,
+	input [1:0] bank,
+	input [15:0] row,
+	input [9:0] col,
+	input row_buffer_hit,
+	output reg cmd_ready,
+	output reg cmd_executed,
+	output reg [3:0] scheduled_cmd_type,
+	output reg [1:0] scheduled_bank_group,
+	output reg [1:0] scheduled_bank,
+	output reg [15:0] scheduled_row,
+	output reg [9:0] scheduled_col,
 	input sys_clk,
 	input sys_rst
 );
 
-reg commandscheduler_cmd_valid = 1'd0;
-reg [3:0] commandscheduler_cmd_type = 4'd0;
-reg [1:0] commandscheduler_bank_group = 2'd0;
-reg [1:0] commandscheduler_bank = 2'd0;
-reg [15:0] commandscheduler_row = 16'd0;
-reg [9:0] commandscheduler_col = 10'd0;
-reg commandscheduler_cmd_ready = 1'd0;
-reg commandscheduler_cmd_executed = 1'd0;
-reg [3:0] commandscheduler_scheduled_cmd_type = 4'd0;
-reg [1:0] commandscheduler_scheduled_bank_group = 2'd0;
-reg [1:0] commandscheduler_scheduled_bank = 2'd0;
-reg [15:0] commandscheduler_scheduled_row = 16'd0;
-reg [9:0] commandscheduler_scheduled_col = 10'd0;
 reg [29:0] commandscheduler0 = 30'd0;
 reg [29:0] commandscheduler1 = 30'd0;
 reg [29:0] commandscheduler2 = 30'd0;
@@ -660,7 +661,7 @@ reg dummy_d;
 // synthesis translate_on
 always @(*) begin
 	basiclowerer_array_muxed0 <= 5'd0;
-	case (((commandscheduler_bank_group * 3'd4) + commandscheduler_bank))
+	case (((bank_group * 3'd4) + bank))
 		1'd0: begin
 			basiclowerer_array_muxed0 <= commandscheduler528;
 		end
@@ -720,7 +721,7 @@ reg dummy_d_1;
 // synthesis translate_on
 always @(*) begin
 	basiclowerer_array_muxed1 <= 5'd0;
-	case (((commandscheduler_bank_group * 3'd4) + commandscheduler_bank))
+	case (((bank_group * 3'd4) + bank))
 		1'd0: begin
 			basiclowerer_array_muxed1 <= commandscheduler512;
 		end
@@ -780,7 +781,7 @@ reg dummy_d_2;
 // synthesis translate_on
 always @(*) begin
 	basiclowerer_basiclowerer_array_muxed <= 5'd0;
-	case (((commandscheduler_bank_group * 3'd4) + commandscheduler_bank))
+	case (((bank_group * 3'd4) + bank))
 		1'd0: begin
 			basiclowerer_basiclowerer_array_muxed <= commandscheduler528;
 		end
@@ -840,7 +841,7 @@ reg dummy_d_3;
 // synthesis translate_on
 always @(*) begin
 	basiclowerer_rhs_array_muxed <= 5'd0;
-	case (((commandscheduler_bank_group * 3'd4) + commandscheduler_bank))
+	case (((bank_group * 3'd4) + bank))
 		1'd0: begin
 			basiclowerer_rhs_array_muxed <= commandscheduler528;
 		end
@@ -6080,13 +6081,13 @@ always @(*) begin
 end
 
 always @(posedge sys_clk) begin
-	if ((commandscheduler_cmd_valid & (~commandscheduler_cmd_ready))) begin
+	if ((cmd_valid & (~cmd_ready))) begin
 		if ((basiclowerer_array_muxed0 != basiclowerer_array_muxed1)) begin
-			basiclowerer_lhs_array_muxed0 = {commandscheduler_col, commandscheduler_row, commandscheduler_cmd_type};
-			case (((commandscheduler_bank_group * 3'd4) + commandscheduler_bank))
+			basiclowerer_lhs_array_muxed0 = {col, row, cmd_type};
+			case (((bank_group * 3'd4) + bank))
 				1'd0: begin
 					basiclowerer_lhs_array_muxed1 = basiclowerer_lhs_array_muxed0;
-					case (((commandscheduler_bank_group * 3'd4) + commandscheduler_bank))
+					case (((bank_group * 3'd4) + bank))
 						1'd0: begin
 							commandscheduler528 <= basiclowerer_lhs_array_muxed2;
 						end
@@ -6237,7 +6238,7 @@ always @(posedge sys_clk) begin
 				end
 				1'd1: begin
 					basiclowerer_lhs_array_muxed3 = basiclowerer_lhs_array_muxed0;
-					case (((commandscheduler_bank_group * 3'd4) + commandscheduler_bank))
+					case (((bank_group * 3'd4) + bank))
 						1'd0: begin
 							commandscheduler528 <= basiclowerer_lhs_array_muxed4;
 						end
@@ -6388,7 +6389,7 @@ always @(posedge sys_clk) begin
 				end
 				2'd2: begin
 					basiclowerer_lhs_array_muxed5 = basiclowerer_lhs_array_muxed0;
-					case (((commandscheduler_bank_group * 3'd4) + commandscheduler_bank))
+					case (((bank_group * 3'd4) + bank))
 						1'd0: begin
 							commandscheduler528 <= basiclowerer_lhs_array_muxed6;
 						end
@@ -6539,7 +6540,7 @@ always @(posedge sys_clk) begin
 				end
 				2'd3: begin
 					basiclowerer_lhs_array_muxed7 = basiclowerer_lhs_array_muxed0;
-					case (((commandscheduler_bank_group * 3'd4) + commandscheduler_bank))
+					case (((bank_group * 3'd4) + bank))
 						1'd0: begin
 							commandscheduler528 <= basiclowerer_lhs_array_muxed8;
 						end
@@ -6690,7 +6691,7 @@ always @(posedge sys_clk) begin
 				end
 				3'd4: begin
 					basiclowerer_lhs_array_muxed9 = basiclowerer_lhs_array_muxed0;
-					case (((commandscheduler_bank_group * 3'd4) + commandscheduler_bank))
+					case (((bank_group * 3'd4) + bank))
 						1'd0: begin
 							commandscheduler528 <= basiclowerer_lhs_array_muxed10;
 						end
@@ -6841,7 +6842,7 @@ always @(posedge sys_clk) begin
 				end
 				3'd5: begin
 					basiclowerer_lhs_array_muxed11 = basiclowerer_lhs_array_muxed0;
-					case (((commandscheduler_bank_group * 3'd4) + commandscheduler_bank))
+					case (((bank_group * 3'd4) + bank))
 						1'd0: begin
 							commandscheduler528 <= basiclowerer_lhs_array_muxed12;
 						end
@@ -6992,7 +6993,7 @@ always @(posedge sys_clk) begin
 				end
 				3'd6: begin
 					basiclowerer_lhs_array_muxed13 = basiclowerer_lhs_array_muxed0;
-					case (((commandscheduler_bank_group * 3'd4) + commandscheduler_bank))
+					case (((bank_group * 3'd4) + bank))
 						1'd0: begin
 							commandscheduler528 <= basiclowerer_lhs_array_muxed14;
 						end
@@ -7143,7 +7144,7 @@ always @(posedge sys_clk) begin
 				end
 				3'd7: begin
 					basiclowerer_lhs_array_muxed15 = basiclowerer_lhs_array_muxed0;
-					case (((commandscheduler_bank_group * 3'd4) + commandscheduler_bank))
+					case (((bank_group * 3'd4) + bank))
 						1'd0: begin
 							commandscheduler528 <= basiclowerer_lhs_array_muxed16;
 						end
@@ -7294,7 +7295,7 @@ always @(posedge sys_clk) begin
 				end
 				4'd8: begin
 					basiclowerer_lhs_array_muxed17 = basiclowerer_lhs_array_muxed0;
-					case (((commandscheduler_bank_group * 3'd4) + commandscheduler_bank))
+					case (((bank_group * 3'd4) + bank))
 						1'd0: begin
 							commandscheduler528 <= basiclowerer_lhs_array_muxed18;
 						end
@@ -7445,7 +7446,7 @@ always @(posedge sys_clk) begin
 				end
 				4'd9: begin
 					basiclowerer_lhs_array_muxed19 = basiclowerer_lhs_array_muxed0;
-					case (((commandscheduler_bank_group * 3'd4) + commandscheduler_bank))
+					case (((bank_group * 3'd4) + bank))
 						1'd0: begin
 							commandscheduler528 <= basiclowerer_lhs_array_muxed20;
 						end
@@ -7596,7 +7597,7 @@ always @(posedge sys_clk) begin
 				end
 				4'd10: begin
 					basiclowerer_lhs_array_muxed21 = basiclowerer_lhs_array_muxed0;
-					case (((commandscheduler_bank_group * 3'd4) + commandscheduler_bank))
+					case (((bank_group * 3'd4) + bank))
 						1'd0: begin
 							commandscheduler528 <= basiclowerer_lhs_array_muxed22;
 						end
@@ -7747,7 +7748,7 @@ always @(posedge sys_clk) begin
 				end
 				4'd11: begin
 					basiclowerer_lhs_array_muxed23 = basiclowerer_lhs_array_muxed0;
-					case (((commandscheduler_bank_group * 3'd4) + commandscheduler_bank))
+					case (((bank_group * 3'd4) + bank))
 						1'd0: begin
 							commandscheduler528 <= basiclowerer_lhs_array_muxed24;
 						end
@@ -7898,7 +7899,7 @@ always @(posedge sys_clk) begin
 				end
 				4'd12: begin
 					basiclowerer_lhs_array_muxed25 = basiclowerer_lhs_array_muxed0;
-					case (((commandscheduler_bank_group * 3'd4) + commandscheduler_bank))
+					case (((bank_group * 3'd4) + bank))
 						1'd0: begin
 							commandscheduler528 <= basiclowerer_lhs_array_muxed26;
 						end
@@ -8049,7 +8050,7 @@ always @(posedge sys_clk) begin
 				end
 				4'd13: begin
 					basiclowerer_lhs_array_muxed27 = basiclowerer_lhs_array_muxed0;
-					case (((commandscheduler_bank_group * 3'd4) + commandscheduler_bank))
+					case (((bank_group * 3'd4) + bank))
 						1'd0: begin
 							commandscheduler528 <= basiclowerer_lhs_array_muxed28;
 						end
@@ -8200,7 +8201,7 @@ always @(posedge sys_clk) begin
 				end
 				4'd14: begin
 					basiclowerer_lhs_array_muxed29 = basiclowerer_lhs_array_muxed0;
-					case (((commandscheduler_bank_group * 3'd4) + commandscheduler_bank))
+					case (((bank_group * 3'd4) + bank))
 						1'd0: begin
 							commandscheduler528 <= basiclowerer_lhs_array_muxed30;
 						end
@@ -8351,7 +8352,7 @@ always @(posedge sys_clk) begin
 				end
 				default: begin
 					basiclowerer_lhs_array_muxed31 = basiclowerer_lhs_array_muxed0;
-					case (((commandscheduler_bank_group * 3'd4) + commandscheduler_bank))
+					case (((bank_group * 3'd4) + bank))
 						1'd0: begin
 							commandscheduler528 <= basiclowerer_lhs_array_muxed32;
 						end
@@ -8503,7 +8504,7 @@ always @(posedge sys_clk) begin
 			endcase
 			if ((basiclowerer_basiclowerer_array_muxed == 5'd31)) begin
 				basiclowerer_t_array_muxed = 1'd0;
-				case (((commandscheduler_bank_group * 3'd4) + commandscheduler_bank))
+				case (((bank_group * 3'd4) + bank))
 					1'd0: begin
 						commandscheduler528 <= basiclowerer_t_array_muxed;
 					end
@@ -8555,7 +8556,7 @@ always @(posedge sys_clk) begin
 				endcase
 			end else begin
 				basiclowerer_lhs_array_muxed33 = (basiclowerer_rhs_array_muxed + 1'd1);
-				case (((commandscheduler_bank_group * 3'd4) + commandscheduler_bank))
+				case (((bank_group * 3'd4) + bank))
 					1'd0: begin
 						commandscheduler528 <= basiclowerer_lhs_array_muxed33;
 					end
@@ -8606,263 +8607,263 @@ always @(posedge sys_clk) begin
 					end
 				endcase
 			end
-			commandscheduler_cmd_ready <= 1'd1;
+			cmd_ready <= 1'd1;
 		end else begin
-			commandscheduler_cmd_ready <= 1'd0;
+			cmd_ready <= 1'd0;
 		end
 	end
-	if ((~commandscheduler_cmd_executed)) begin
-		case (((commandscheduler_bank_group * 3'd4) + commandscheduler_bank))
+	if ((~cmd_executed)) begin
+		case (((bank_group * 3'd4) + bank))
 			1'd0: begin
 				if ((commandscheduler512 != commandscheduler528)) begin
-					commandscheduler_scheduled_cmd_type <= cases_array_muxed0;
-					commandscheduler_scheduled_row <= cases_array_muxed1;
-					commandscheduler_scheduled_col <= cases_array_muxed2;
-					commandscheduler_scheduled_bank_group <= 1'd0;
-					commandscheduler_scheduled_bank <= 1'd0;
+					scheduled_cmd_type <= cases_array_muxed0;
+					scheduled_row <= cases_array_muxed1;
+					scheduled_col <= cases_array_muxed2;
+					scheduled_bank_group <= 1'd0;
+					scheduled_bank <= 1'd0;
 					if ((commandscheduler512 == 5'd31)) begin
 						commandscheduler512 <= 1'd0;
 					end else begin
 						commandscheduler512 <= (commandscheduler512 + 1'd1);
 					end
-					commandscheduler_cmd_executed <= 1'd1;
+					cmd_executed <= 1'd1;
 				end
 			end
 			1'd1: begin
 				if ((commandscheduler513 != commandscheduler529)) begin
-					commandscheduler_scheduled_cmd_type <= cases_array_muxed3;
-					commandscheduler_scheduled_row <= cases_array_muxed4;
-					commandscheduler_scheduled_col <= cases_array_muxed5;
-					commandscheduler_scheduled_bank_group <= 1'd0;
-					commandscheduler_scheduled_bank <= 1'd1;
+					scheduled_cmd_type <= cases_array_muxed3;
+					scheduled_row <= cases_array_muxed4;
+					scheduled_col <= cases_array_muxed5;
+					scheduled_bank_group <= 1'd0;
+					scheduled_bank <= 1'd1;
 					if ((commandscheduler513 == 5'd31)) begin
 						commandscheduler513 <= 1'd0;
 					end else begin
 						commandscheduler513 <= (commandscheduler513 + 1'd1);
 					end
-					commandscheduler_cmd_executed <= 1'd1;
+					cmd_executed <= 1'd1;
 				end
 			end
 			2'd2: begin
 				if ((commandscheduler514 != commandscheduler530)) begin
-					commandscheduler_scheduled_cmd_type <= cases_array_muxed6;
-					commandscheduler_scheduled_row <= cases_array_muxed7;
-					commandscheduler_scheduled_col <= cases_array_muxed8;
-					commandscheduler_scheduled_bank_group <= 1'd0;
-					commandscheduler_scheduled_bank <= 2'd2;
+					scheduled_cmd_type <= cases_array_muxed6;
+					scheduled_row <= cases_array_muxed7;
+					scheduled_col <= cases_array_muxed8;
+					scheduled_bank_group <= 1'd0;
+					scheduled_bank <= 2'd2;
 					if ((commandscheduler514 == 5'd31)) begin
 						commandscheduler514 <= 1'd0;
 					end else begin
 						commandscheduler514 <= (commandscheduler514 + 1'd1);
 					end
-					commandscheduler_cmd_executed <= 1'd1;
+					cmd_executed <= 1'd1;
 				end
 			end
 			2'd3: begin
 				if ((commandscheduler515 != commandscheduler531)) begin
-					commandscheduler_scheduled_cmd_type <= cases_array_muxed9;
-					commandscheduler_scheduled_row <= cases_array_muxed10;
-					commandscheduler_scheduled_col <= cases_array_muxed11;
-					commandscheduler_scheduled_bank_group <= 1'd0;
-					commandscheduler_scheduled_bank <= 2'd3;
+					scheduled_cmd_type <= cases_array_muxed9;
+					scheduled_row <= cases_array_muxed10;
+					scheduled_col <= cases_array_muxed11;
+					scheduled_bank_group <= 1'd0;
+					scheduled_bank <= 2'd3;
 					if ((commandscheduler515 == 5'd31)) begin
 						commandscheduler515 <= 1'd0;
 					end else begin
 						commandscheduler515 <= (commandscheduler515 + 1'd1);
 					end
-					commandscheduler_cmd_executed <= 1'd1;
+					cmd_executed <= 1'd1;
 				end
 			end
 			3'd4: begin
 				if ((commandscheduler516 != commandscheduler532)) begin
-					commandscheduler_scheduled_cmd_type <= cases_array_muxed12;
-					commandscheduler_scheduled_row <= cases_array_muxed13;
-					commandscheduler_scheduled_col <= cases_array_muxed14;
-					commandscheduler_scheduled_bank_group <= 1'd1;
-					commandscheduler_scheduled_bank <= 1'd0;
+					scheduled_cmd_type <= cases_array_muxed12;
+					scheduled_row <= cases_array_muxed13;
+					scheduled_col <= cases_array_muxed14;
+					scheduled_bank_group <= 1'd1;
+					scheduled_bank <= 1'd0;
 					if ((commandscheduler516 == 5'd31)) begin
 						commandscheduler516 <= 1'd0;
 					end else begin
 						commandscheduler516 <= (commandscheduler516 + 1'd1);
 					end
-					commandscheduler_cmd_executed <= 1'd1;
+					cmd_executed <= 1'd1;
 				end
 			end
 			3'd5: begin
 				if ((commandscheduler517 != commandscheduler533)) begin
-					commandscheduler_scheduled_cmd_type <= cases_array_muxed15;
-					commandscheduler_scheduled_row <= cases_array_muxed16;
-					commandscheduler_scheduled_col <= cases_array_muxed17;
-					commandscheduler_scheduled_bank_group <= 1'd1;
-					commandscheduler_scheduled_bank <= 1'd1;
+					scheduled_cmd_type <= cases_array_muxed15;
+					scheduled_row <= cases_array_muxed16;
+					scheduled_col <= cases_array_muxed17;
+					scheduled_bank_group <= 1'd1;
+					scheduled_bank <= 1'd1;
 					if ((commandscheduler517 == 5'd31)) begin
 						commandscheduler517 <= 1'd0;
 					end else begin
 						commandscheduler517 <= (commandscheduler517 + 1'd1);
 					end
-					commandscheduler_cmd_executed <= 1'd1;
+					cmd_executed <= 1'd1;
 				end
 			end
 			3'd6: begin
 				if ((commandscheduler518 != commandscheduler534)) begin
-					commandscheduler_scheduled_cmd_type <= cases_array_muxed18;
-					commandscheduler_scheduled_row <= cases_array_muxed19;
-					commandscheduler_scheduled_col <= cases_array_muxed20;
-					commandscheduler_scheduled_bank_group <= 1'd1;
-					commandscheduler_scheduled_bank <= 2'd2;
+					scheduled_cmd_type <= cases_array_muxed18;
+					scheduled_row <= cases_array_muxed19;
+					scheduled_col <= cases_array_muxed20;
+					scheduled_bank_group <= 1'd1;
+					scheduled_bank <= 2'd2;
 					if ((commandscheduler518 == 5'd31)) begin
 						commandscheduler518 <= 1'd0;
 					end else begin
 						commandscheduler518 <= (commandscheduler518 + 1'd1);
 					end
-					commandscheduler_cmd_executed <= 1'd1;
+					cmd_executed <= 1'd1;
 				end
 			end
 			3'd7: begin
 				if ((commandscheduler519 != commandscheduler535)) begin
-					commandscheduler_scheduled_cmd_type <= cases_array_muxed21;
-					commandscheduler_scheduled_row <= cases_array_muxed22;
-					commandscheduler_scheduled_col <= cases_array_muxed23;
-					commandscheduler_scheduled_bank_group <= 1'd1;
-					commandscheduler_scheduled_bank <= 2'd3;
+					scheduled_cmd_type <= cases_array_muxed21;
+					scheduled_row <= cases_array_muxed22;
+					scheduled_col <= cases_array_muxed23;
+					scheduled_bank_group <= 1'd1;
+					scheduled_bank <= 2'd3;
 					if ((commandscheduler519 == 5'd31)) begin
 						commandscheduler519 <= 1'd0;
 					end else begin
 						commandscheduler519 <= (commandscheduler519 + 1'd1);
 					end
-					commandscheduler_cmd_executed <= 1'd1;
+					cmd_executed <= 1'd1;
 				end
 			end
 			4'd8: begin
 				if ((commandscheduler520 != commandscheduler536)) begin
-					commandscheduler_scheduled_cmd_type <= cases_array_muxed24;
-					commandscheduler_scheduled_row <= cases_array_muxed25;
-					commandscheduler_scheduled_col <= cases_array_muxed26;
-					commandscheduler_scheduled_bank_group <= 2'd2;
-					commandscheduler_scheduled_bank <= 1'd0;
+					scheduled_cmd_type <= cases_array_muxed24;
+					scheduled_row <= cases_array_muxed25;
+					scheduled_col <= cases_array_muxed26;
+					scheduled_bank_group <= 2'd2;
+					scheduled_bank <= 1'd0;
 					if ((commandscheduler520 == 5'd31)) begin
 						commandscheduler520 <= 1'd0;
 					end else begin
 						commandscheduler520 <= (commandscheduler520 + 1'd1);
 					end
-					commandscheduler_cmd_executed <= 1'd1;
+					cmd_executed <= 1'd1;
 				end
 			end
 			4'd9: begin
 				if ((commandscheduler521 != commandscheduler537)) begin
-					commandscheduler_scheduled_cmd_type <= cases_array_muxed27;
-					commandscheduler_scheduled_row <= cases_array_muxed28;
-					commandscheduler_scheduled_col <= cases_array_muxed29;
-					commandscheduler_scheduled_bank_group <= 2'd2;
-					commandscheduler_scheduled_bank <= 1'd1;
+					scheduled_cmd_type <= cases_array_muxed27;
+					scheduled_row <= cases_array_muxed28;
+					scheduled_col <= cases_array_muxed29;
+					scheduled_bank_group <= 2'd2;
+					scheduled_bank <= 1'd1;
 					if ((commandscheduler521 == 5'd31)) begin
 						commandscheduler521 <= 1'd0;
 					end else begin
 						commandscheduler521 <= (commandscheduler521 + 1'd1);
 					end
-					commandscheduler_cmd_executed <= 1'd1;
+					cmd_executed <= 1'd1;
 				end
 			end
 			4'd10: begin
 				if ((commandscheduler522 != commandscheduler538)) begin
-					commandscheduler_scheduled_cmd_type <= cases_array_muxed30;
-					commandscheduler_scheduled_row <= cases_array_muxed31;
-					commandscheduler_scheduled_col <= cases_array_muxed32;
-					commandscheduler_scheduled_bank_group <= 2'd2;
-					commandscheduler_scheduled_bank <= 2'd2;
+					scheduled_cmd_type <= cases_array_muxed30;
+					scheduled_row <= cases_array_muxed31;
+					scheduled_col <= cases_array_muxed32;
+					scheduled_bank_group <= 2'd2;
+					scheduled_bank <= 2'd2;
 					if ((commandscheduler522 == 5'd31)) begin
 						commandscheduler522 <= 1'd0;
 					end else begin
 						commandscheduler522 <= (commandscheduler522 + 1'd1);
 					end
-					commandscheduler_cmd_executed <= 1'd1;
+					cmd_executed <= 1'd1;
 				end
 			end
 			4'd11: begin
 				if ((commandscheduler523 != commandscheduler539)) begin
-					commandscheduler_scheduled_cmd_type <= cases_array_muxed33;
-					commandscheduler_scheduled_row <= cases_array_muxed34;
-					commandscheduler_scheduled_col <= cases_array_muxed35;
-					commandscheduler_scheduled_bank_group <= 2'd2;
-					commandscheduler_scheduled_bank <= 2'd3;
+					scheduled_cmd_type <= cases_array_muxed33;
+					scheduled_row <= cases_array_muxed34;
+					scheduled_col <= cases_array_muxed35;
+					scheduled_bank_group <= 2'd2;
+					scheduled_bank <= 2'd3;
 					if ((commandscheduler523 == 5'd31)) begin
 						commandscheduler523 <= 1'd0;
 					end else begin
 						commandscheduler523 <= (commandscheduler523 + 1'd1);
 					end
-					commandscheduler_cmd_executed <= 1'd1;
+					cmd_executed <= 1'd1;
 				end
 			end
 			4'd12: begin
 				if ((commandscheduler524 != commandscheduler540)) begin
-					commandscheduler_scheduled_cmd_type <= cases_array_muxed36;
-					commandscheduler_scheduled_row <= cases_array_muxed37;
-					commandscheduler_scheduled_col <= cases_array_muxed38;
-					commandscheduler_scheduled_bank_group <= 2'd3;
-					commandscheduler_scheduled_bank <= 1'd0;
+					scheduled_cmd_type <= cases_array_muxed36;
+					scheduled_row <= cases_array_muxed37;
+					scheduled_col <= cases_array_muxed38;
+					scheduled_bank_group <= 2'd3;
+					scheduled_bank <= 1'd0;
 					if ((commandscheduler524 == 5'd31)) begin
 						commandscheduler524 <= 1'd0;
 					end else begin
 						commandscheduler524 <= (commandscheduler524 + 1'd1);
 					end
-					commandscheduler_cmd_executed <= 1'd1;
+					cmd_executed <= 1'd1;
 				end
 			end
 			4'd13: begin
 				if ((commandscheduler525 != commandscheduler541)) begin
-					commandscheduler_scheduled_cmd_type <= cases_array_muxed39;
-					commandscheduler_scheduled_row <= cases_array_muxed40;
-					commandscheduler_scheduled_col <= cases_array_muxed41;
-					commandscheduler_scheduled_bank_group <= 2'd3;
-					commandscheduler_scheduled_bank <= 1'd1;
+					scheduled_cmd_type <= cases_array_muxed39;
+					scheduled_row <= cases_array_muxed40;
+					scheduled_col <= cases_array_muxed41;
+					scheduled_bank_group <= 2'd3;
+					scheduled_bank <= 1'd1;
 					if ((commandscheduler525 == 5'd31)) begin
 						commandscheduler525 <= 1'd0;
 					end else begin
 						commandscheduler525 <= (commandscheduler525 + 1'd1);
 					end
-					commandscheduler_cmd_executed <= 1'd1;
+					cmd_executed <= 1'd1;
 				end
 			end
 			4'd14: begin
 				if ((commandscheduler526 != commandscheduler542)) begin
-					commandscheduler_scheduled_cmd_type <= cases_array_muxed42;
-					commandscheduler_scheduled_row <= cases_array_muxed43;
-					commandscheduler_scheduled_col <= cases_array_muxed44;
-					commandscheduler_scheduled_bank_group <= 2'd3;
-					commandscheduler_scheduled_bank <= 2'd2;
+					scheduled_cmd_type <= cases_array_muxed42;
+					scheduled_row <= cases_array_muxed43;
+					scheduled_col <= cases_array_muxed44;
+					scheduled_bank_group <= 2'd3;
+					scheduled_bank <= 2'd2;
 					if ((commandscheduler526 == 5'd31)) begin
 						commandscheduler526 <= 1'd0;
 					end else begin
 						commandscheduler526 <= (commandscheduler526 + 1'd1);
 					end
-					commandscheduler_cmd_executed <= 1'd1;
+					cmd_executed <= 1'd1;
 				end
 			end
 			4'd15: begin
 				if ((commandscheduler527 != commandscheduler543)) begin
-					commandscheduler_scheduled_cmd_type <= cases_array_muxed45;
-					commandscheduler_scheduled_row <= cases_array_muxed46;
-					commandscheduler_scheduled_col <= cases_array_muxed47;
-					commandscheduler_scheduled_bank_group <= 2'd3;
-					commandscheduler_scheduled_bank <= 2'd3;
+					scheduled_cmd_type <= cases_array_muxed45;
+					scheduled_row <= cases_array_muxed46;
+					scheduled_col <= cases_array_muxed47;
+					scheduled_bank_group <= 2'd3;
+					scheduled_bank <= 2'd3;
 					if ((commandscheduler527 == 5'd31)) begin
 						commandscheduler527 <= 1'd0;
 					end else begin
 						commandscheduler527 <= (commandscheduler527 + 1'd1);
 					end
-					commandscheduler_cmd_executed <= 1'd1;
+					cmd_executed <= 1'd1;
 				end
 			end
 		endcase
 	end
 	if (sys_rst) begin
-		commandscheduler_cmd_ready <= 1'd0;
-		commandscheduler_cmd_executed <= 1'd0;
-		commandscheduler_scheduled_cmd_type <= 4'd0;
-		commandscheduler_scheduled_bank_group <= 2'd0;
-		commandscheduler_scheduled_bank <= 2'd0;
-		commandscheduler_scheduled_row <= 16'd0;
-		commandscheduler_scheduled_col <= 10'd0;
+		cmd_ready <= 1'd0;
+		cmd_executed <= 1'd0;
+		scheduled_cmd_type <= 4'd0;
+		scheduled_bank_group <= 2'd0;
+		scheduled_bank <= 2'd0;
+		scheduled_row <= 16'd0;
+		scheduled_col <= 10'd0;
 		commandscheduler0 <= 30'd0;
 		commandscheduler1 <= 30'd0;
 		commandscheduler2 <= 30'd0;

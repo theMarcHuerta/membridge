@@ -1,14 +1,16 @@
 /* Machine-generated using Migen */
 module RowBufferManager(
+	input [3:0] cmd_decoded,
+	input [1:0] bank_group,
+	input [1:0] bank,
+	input [15:0] row,
+	output row_buffer_hit,
+	input row_activate,
+	input row_precharge,
 	input sys_clk,
 	input sys_rst
 );
 
-reg [3:0] rowbuffermanager_cmd_decoded = 4'd0;
-reg [1:0] rowbuffermanager_bank_group = 2'd0;
-reg [1:0] rowbuffermanager_bank = 2'd0;
-reg [15:0] rowbuffermanager_row = 16'd0;
-wire rowbuffermanager_row_buffer_hit;
 wire [15:0] rowbuffermanager_current_row;
 wire rowbuffermanager_row_open;
 reg rowbuffermanager0 = 1'd0;
@@ -114,7 +116,7 @@ reg dummy_s;
 initial dummy_s <= 1'd0;
 // synthesis translate_on
 
-assign rowbuffermanager_row_buffer_hit = (rowbuffermanager_row_open & (rowbuffermanager_current_row == rowbuffermanager_row));
+assign row_buffer_hit = (rowbuffermanager_row_open & (rowbuffermanager_current_row == row));
 assign rowbuffermanager_row_open = array_muxed0;
 assign rowbuffermanager_current_row = array_muxed5;
 
@@ -123,7 +125,7 @@ reg dummy_d;
 // synthesis translate_on
 always @(*) begin
 	array_muxed1 <= 1'd0;
-	case (rowbuffermanager_bank)
+	case (bank)
 		1'd0: begin
 			array_muxed1 <= rowbuffermanager0;
 		end
@@ -147,7 +149,7 @@ reg dummy_d_1;
 // synthesis translate_on
 always @(*) begin
 	array_muxed2 <= 1'd0;
-	case (rowbuffermanager_bank)
+	case (bank)
 		1'd0: begin
 			array_muxed2 <= rowbuffermanager4;
 		end
@@ -171,7 +173,7 @@ reg dummy_d_2;
 // synthesis translate_on
 always @(*) begin
 	array_muxed3 <= 1'd0;
-	case (rowbuffermanager_bank)
+	case (bank)
 		1'd0: begin
 			array_muxed3 <= rowbuffermanager8;
 		end
@@ -195,7 +197,7 @@ reg dummy_d_3;
 // synthesis translate_on
 always @(*) begin
 	array_muxed4 <= 1'd0;
-	case (rowbuffermanager_bank)
+	case (bank)
 		1'd0: begin
 			array_muxed4 <= rowbuffermanager12;
 		end
@@ -219,7 +221,7 @@ reg dummy_d_4;
 // synthesis translate_on
 always @(*) begin
 	array_muxed0 <= 1'd0;
-	case (rowbuffermanager_bank_group)
+	case (bank_group)
 		1'd0: begin
 			array_muxed0 <= array_muxed1;
 		end
@@ -243,7 +245,7 @@ reg dummy_d_5;
 // synthesis translate_on
 always @(*) begin
 	array_muxed6 <= 16'd0;
-	case (rowbuffermanager_bank)
+	case (bank)
 		1'd0: begin
 			array_muxed6 <= rowbuffermanager16;
 		end
@@ -267,7 +269,7 @@ reg dummy_d_6;
 // synthesis translate_on
 always @(*) begin
 	array_muxed7 <= 16'd0;
-	case (rowbuffermanager_bank)
+	case (bank)
 		1'd0: begin
 			array_muxed7 <= rowbuffermanager20;
 		end
@@ -291,7 +293,7 @@ reg dummy_d_7;
 // synthesis translate_on
 always @(*) begin
 	array_muxed8 <= 16'd0;
-	case (rowbuffermanager_bank)
+	case (bank)
 		1'd0: begin
 			array_muxed8 <= rowbuffermanager24;
 		end
@@ -315,7 +317,7 @@ reg dummy_d_8;
 // synthesis translate_on
 always @(*) begin
 	array_muxed9 <= 16'd0;
-	case (rowbuffermanager_bank)
+	case (bank)
 		1'd0: begin
 			array_muxed9 <= rowbuffermanager28;
 		end
@@ -339,7 +341,7 @@ reg dummy_d_9;
 // synthesis translate_on
 always @(*) begin
 	array_muxed5 <= 16'd0;
-	case (rowbuffermanager_bank_group)
+	case (bank_group)
 		1'd0: begin
 			array_muxed5 <= array_muxed6;
 		end
@@ -363,7 +365,7 @@ reg dummy_d_10;
 // synthesis translate_on
 always @(*) begin
 	basiclowerer_array_muxed1 <= 16'd0;
-	case (rowbuffermanager_bank)
+	case (bank)
 		1'd0: begin
 			basiclowerer_array_muxed1 <= rowbuffermanager16;
 		end
@@ -387,7 +389,7 @@ reg dummy_d_11;
 // synthesis translate_on
 always @(*) begin
 	basiclowerer_array_muxed2 <= 16'd0;
-	case (rowbuffermanager_bank)
+	case (bank)
 		1'd0: begin
 			basiclowerer_array_muxed2 <= rowbuffermanager20;
 		end
@@ -411,7 +413,7 @@ reg dummy_d_12;
 // synthesis translate_on
 always @(*) begin
 	basiclowerer_array_muxed3 <= 16'd0;
-	case (rowbuffermanager_bank)
+	case (bank)
 		1'd0: begin
 			basiclowerer_array_muxed3 <= rowbuffermanager24;
 		end
@@ -435,7 +437,7 @@ reg dummy_d_13;
 // synthesis translate_on
 always @(*) begin
 	basiclowerer_array_muxed4 <= 16'd0;
-	case (rowbuffermanager_bank)
+	case (bank)
 		1'd0: begin
 			basiclowerer_array_muxed4 <= rowbuffermanager28;
 		end
@@ -459,7 +461,7 @@ reg dummy_d_14;
 // synthesis translate_on
 always @(*) begin
 	basiclowerer_array_muxed0 <= 16'd0;
-	case (rowbuffermanager_bank_group)
+	case (bank_group)
 		1'd0: begin
 			basiclowerer_array_muxed0 <= basiclowerer_array_muxed1;
 		end
@@ -483,7 +485,7 @@ reg dummy_d_15;
 // synthesis translate_on
 always @(*) begin
 	basiclowerer_array_muxed16 <= 16'd0;
-	case (rowbuffermanager_bank)
+	case (bank)
 		1'd0: begin
 			basiclowerer_array_muxed16 <= rowbuffermanager16;
 		end
@@ -507,7 +509,7 @@ reg dummy_d_16;
 // synthesis translate_on
 always @(*) begin
 	basiclowerer_array_muxed17 <= 16'd0;
-	case (rowbuffermanager_bank)
+	case (bank)
 		1'd0: begin
 			basiclowerer_array_muxed17 <= rowbuffermanager20;
 		end
@@ -531,7 +533,7 @@ reg dummy_d_17;
 // synthesis translate_on
 always @(*) begin
 	basiclowerer_array_muxed18 <= 16'd0;
-	case (rowbuffermanager_bank)
+	case (bank)
 		1'd0: begin
 			basiclowerer_array_muxed18 <= rowbuffermanager24;
 		end
@@ -555,7 +557,7 @@ reg dummy_d_18;
 // synthesis translate_on
 always @(*) begin
 	basiclowerer_array_muxed19 <= 16'd0;
-	case (rowbuffermanager_bank)
+	case (bank)
 		1'd0: begin
 			basiclowerer_array_muxed19 <= rowbuffermanager28;
 		end
@@ -579,7 +581,7 @@ reg dummy_d_19;
 // synthesis translate_on
 always @(*) begin
 	basiclowerer_array_muxed15 <= 16'd0;
-	case (rowbuffermanager_bank_group)
+	case (bank_group)
 		1'd0: begin
 			basiclowerer_array_muxed15 <= basiclowerer_array_muxed16;
 		end
@@ -599,13 +601,13 @@ always @(*) begin
 end
 
 always @(posedge sys_clk) begin
-	case (rowbuffermanager_cmd_decoded)
+	case (cmd_decoded)
 		2'd2: begin
 			lhs_array_muxed10 = 1'd0;
-			case (rowbuffermanager_bank_group)
+			case (bank_group)
 				1'd0: begin
 					lhs_array_muxed11 = lhs_array_muxed10;
-					case (rowbuffermanager_bank)
+					case (bank)
 						1'd0: begin
 							rowbuffermanager0 <= lhs_array_muxed11;
 						end
@@ -622,7 +624,7 @@ always @(posedge sys_clk) begin
 				end
 				1'd1: begin
 					lhs_array_muxed12 = lhs_array_muxed10;
-					case (rowbuffermanager_bank)
+					case (bank)
 						1'd0: begin
 							rowbuffermanager4 <= lhs_array_muxed12;
 						end
@@ -639,7 +641,7 @@ always @(posedge sys_clk) begin
 				end
 				2'd2: begin
 					lhs_array_muxed13 = lhs_array_muxed10;
-					case (rowbuffermanager_bank)
+					case (bank)
 						1'd0: begin
 							rowbuffermanager8 <= lhs_array_muxed13;
 						end
@@ -656,7 +658,7 @@ always @(posedge sys_clk) begin
 				end
 				default: begin
 					lhs_array_muxed14 = lhs_array_muxed10;
-					case (rowbuffermanager_bank)
+					case (bank)
 						1'd0: begin
 							rowbuffermanager12 <= lhs_array_muxed14;
 						end
@@ -675,10 +677,10 @@ always @(posedge sys_clk) begin
 		end
 		2'd3: begin
 			lhs_array_muxed0 = 1'd1;
-			case (rowbuffermanager_bank_group)
+			case (bank_group)
 				1'd0: begin
 					lhs_array_muxed1 = lhs_array_muxed0;
-					case (rowbuffermanager_bank)
+					case (bank)
 						1'd0: begin
 							rowbuffermanager0 <= lhs_array_muxed1;
 						end
@@ -695,7 +697,7 @@ always @(posedge sys_clk) begin
 				end
 				1'd1: begin
 					lhs_array_muxed2 = lhs_array_muxed0;
-					case (rowbuffermanager_bank)
+					case (bank)
 						1'd0: begin
 							rowbuffermanager4 <= lhs_array_muxed2;
 						end
@@ -712,7 +714,7 @@ always @(posedge sys_clk) begin
 				end
 				2'd2: begin
 					lhs_array_muxed3 = lhs_array_muxed0;
-					case (rowbuffermanager_bank)
+					case (bank)
 						1'd0: begin
 							rowbuffermanager8 <= lhs_array_muxed3;
 						end
@@ -729,7 +731,7 @@ always @(posedge sys_clk) begin
 				end
 				default: begin
 					lhs_array_muxed4 = lhs_array_muxed0;
-					case (rowbuffermanager_bank)
+					case (bank)
 						1'd0: begin
 							rowbuffermanager12 <= lhs_array_muxed4;
 						end
@@ -745,11 +747,11 @@ always @(posedge sys_clk) begin
 					endcase
 				end
 			endcase
-			lhs_array_muxed5 = rowbuffermanager_row;
-			case (rowbuffermanager_bank_group)
+			lhs_array_muxed5 = row;
+			case (bank_group)
 				1'd0: begin
 					lhs_array_muxed6 = lhs_array_muxed5;
-					case (rowbuffermanager_bank)
+					case (bank)
 						1'd0: begin
 							rowbuffermanager16 <= lhs_array_muxed6;
 						end
@@ -766,7 +768,7 @@ always @(posedge sys_clk) begin
 				end
 				1'd1: begin
 					lhs_array_muxed7 = lhs_array_muxed5;
-					case (rowbuffermanager_bank)
+					case (bank)
 						1'd0: begin
 							rowbuffermanager20 <= lhs_array_muxed7;
 						end
@@ -783,7 +785,7 @@ always @(posedge sys_clk) begin
 				end
 				2'd2: begin
 					lhs_array_muxed8 = lhs_array_muxed5;
-					case (rowbuffermanager_bank)
+					case (bank)
 						1'd0: begin
 							rowbuffermanager24 <= lhs_array_muxed8;
 						end
@@ -800,7 +802,7 @@ always @(posedge sys_clk) begin
 				end
 				default: begin
 					lhs_array_muxed9 = lhs_array_muxed5;
-					case (rowbuffermanager_bank)
+					case (bank)
 						1'd0: begin
 							rowbuffermanager28 <= lhs_array_muxed9;
 						end
@@ -818,12 +820,12 @@ always @(posedge sys_clk) begin
 			endcase
 		end
 		3'd4: begin
-			if ((basiclowerer_array_muxed15 != rowbuffermanager_row)) begin
+			if ((basiclowerer_array_muxed15 != row)) begin
 				lhs_array_muxed20 = 1'd0;
-				case (rowbuffermanager_bank_group)
+				case (bank_group)
 					1'd0: begin
 						lhs_array_muxed21 = lhs_array_muxed20;
-						case (rowbuffermanager_bank)
+						case (bank)
 							1'd0: begin
 								rowbuffermanager0 <= lhs_array_muxed21;
 							end
@@ -840,7 +842,7 @@ always @(posedge sys_clk) begin
 					end
 					1'd1: begin
 						lhs_array_muxed22 = lhs_array_muxed20;
-						case (rowbuffermanager_bank)
+						case (bank)
 							1'd0: begin
 								rowbuffermanager4 <= lhs_array_muxed22;
 							end
@@ -857,7 +859,7 @@ always @(posedge sys_clk) begin
 					end
 					2'd2: begin
 						lhs_array_muxed23 = lhs_array_muxed20;
-						case (rowbuffermanager_bank)
+						case (bank)
 							1'd0: begin
 								rowbuffermanager8 <= lhs_array_muxed23;
 							end
@@ -874,7 +876,7 @@ always @(posedge sys_clk) begin
 					end
 					default: begin
 						lhs_array_muxed24 = lhs_array_muxed20;
-						case (rowbuffermanager_bank)
+						case (bank)
 							1'd0: begin
 								rowbuffermanager12 <= lhs_array_muxed24;
 							end
@@ -891,10 +893,10 @@ always @(posedge sys_clk) begin
 					end
 				endcase
 				basiclowerer_array_muxed20 = 1'd1;
-				case (rowbuffermanager_bank_group)
+				case (bank_group)
 					1'd0: begin
 						basiclowerer_array_muxed21 = basiclowerer_array_muxed20;
-						case (rowbuffermanager_bank)
+						case (bank)
 							1'd0: begin
 								rowbuffermanager0 <= basiclowerer_array_muxed21;
 							end
@@ -911,7 +913,7 @@ always @(posedge sys_clk) begin
 					end
 					1'd1: begin
 						basiclowerer_array_muxed22 = basiclowerer_array_muxed20;
-						case (rowbuffermanager_bank)
+						case (bank)
 							1'd0: begin
 								rowbuffermanager4 <= basiclowerer_array_muxed22;
 							end
@@ -928,7 +930,7 @@ always @(posedge sys_clk) begin
 					end
 					2'd2: begin
 						basiclowerer_array_muxed23 = basiclowerer_array_muxed20;
-						case (rowbuffermanager_bank)
+						case (bank)
 							1'd0: begin
 								rowbuffermanager8 <= basiclowerer_array_muxed23;
 							end
@@ -945,7 +947,7 @@ always @(posedge sys_clk) begin
 					end
 					default: begin
 						basiclowerer_array_muxed24 = basiclowerer_array_muxed20;
-						case (rowbuffermanager_bank)
+						case (bank)
 							1'd0: begin
 								rowbuffermanager12 <= basiclowerer_array_muxed24;
 							end
@@ -961,11 +963,11 @@ always @(posedge sys_clk) begin
 						endcase
 					end
 				endcase
-				basiclowerer_array_muxed25 = rowbuffermanager_row;
-				case (rowbuffermanager_bank_group)
+				basiclowerer_array_muxed25 = row;
+				case (bank_group)
 					1'd0: begin
 						basiclowerer_array_muxed26 = basiclowerer_array_muxed25;
-						case (rowbuffermanager_bank)
+						case (bank)
 							1'd0: begin
 								rowbuffermanager16 <= basiclowerer_array_muxed26;
 							end
@@ -982,7 +984,7 @@ always @(posedge sys_clk) begin
 					end
 					1'd1: begin
 						basiclowerer_array_muxed27 = basiclowerer_array_muxed25;
-						case (rowbuffermanager_bank)
+						case (bank)
 							1'd0: begin
 								rowbuffermanager20 <= basiclowerer_array_muxed27;
 							end
@@ -999,7 +1001,7 @@ always @(posedge sys_clk) begin
 					end
 					2'd2: begin
 						basiclowerer_array_muxed28 = basiclowerer_array_muxed25;
-						case (rowbuffermanager_bank)
+						case (bank)
 							1'd0: begin
 								rowbuffermanager24 <= basiclowerer_array_muxed28;
 							end
@@ -1016,7 +1018,7 @@ always @(posedge sys_clk) begin
 					end
 					default: begin
 						basiclowerer_array_muxed29 = basiclowerer_array_muxed25;
-						case (rowbuffermanager_bank)
+						case (bank)
 							1'd0: begin
 								rowbuffermanager28 <= basiclowerer_array_muxed29;
 							end
@@ -1035,12 +1037,12 @@ always @(posedge sys_clk) begin
 			end
 		end
 		3'd5: begin
-			if ((basiclowerer_array_muxed0 != rowbuffermanager_row)) begin
+			if ((basiclowerer_array_muxed0 != row)) begin
 				lhs_array_muxed15 = 1'd0;
-				case (rowbuffermanager_bank_group)
+				case (bank_group)
 					1'd0: begin
 						lhs_array_muxed16 = lhs_array_muxed15;
-						case (rowbuffermanager_bank)
+						case (bank)
 							1'd0: begin
 								rowbuffermanager0 <= lhs_array_muxed16;
 							end
@@ -1057,7 +1059,7 @@ always @(posedge sys_clk) begin
 					end
 					1'd1: begin
 						lhs_array_muxed17 = lhs_array_muxed15;
-						case (rowbuffermanager_bank)
+						case (bank)
 							1'd0: begin
 								rowbuffermanager4 <= lhs_array_muxed17;
 							end
@@ -1074,7 +1076,7 @@ always @(posedge sys_clk) begin
 					end
 					2'd2: begin
 						lhs_array_muxed18 = lhs_array_muxed15;
-						case (rowbuffermanager_bank)
+						case (bank)
 							1'd0: begin
 								rowbuffermanager8 <= lhs_array_muxed18;
 							end
@@ -1091,7 +1093,7 @@ always @(posedge sys_clk) begin
 					end
 					default: begin
 						lhs_array_muxed19 = lhs_array_muxed15;
-						case (rowbuffermanager_bank)
+						case (bank)
 							1'd0: begin
 								rowbuffermanager12 <= lhs_array_muxed19;
 							end
@@ -1108,10 +1110,10 @@ always @(posedge sys_clk) begin
 					end
 				endcase
 				basiclowerer_array_muxed5 = 1'd1;
-				case (rowbuffermanager_bank_group)
+				case (bank_group)
 					1'd0: begin
 						basiclowerer_array_muxed6 = basiclowerer_array_muxed5;
-						case (rowbuffermanager_bank)
+						case (bank)
 							1'd0: begin
 								rowbuffermanager0 <= basiclowerer_array_muxed6;
 							end
@@ -1128,7 +1130,7 @@ always @(posedge sys_clk) begin
 					end
 					1'd1: begin
 						basiclowerer_array_muxed7 = basiclowerer_array_muxed5;
-						case (rowbuffermanager_bank)
+						case (bank)
 							1'd0: begin
 								rowbuffermanager4 <= basiclowerer_array_muxed7;
 							end
@@ -1145,7 +1147,7 @@ always @(posedge sys_clk) begin
 					end
 					2'd2: begin
 						basiclowerer_array_muxed8 = basiclowerer_array_muxed5;
-						case (rowbuffermanager_bank)
+						case (bank)
 							1'd0: begin
 								rowbuffermanager8 <= basiclowerer_array_muxed8;
 							end
@@ -1162,7 +1164,7 @@ always @(posedge sys_clk) begin
 					end
 					default: begin
 						basiclowerer_array_muxed9 = basiclowerer_array_muxed5;
-						case (rowbuffermanager_bank)
+						case (bank)
 							1'd0: begin
 								rowbuffermanager12 <= basiclowerer_array_muxed9;
 							end
@@ -1178,11 +1180,11 @@ always @(posedge sys_clk) begin
 						endcase
 					end
 				endcase
-				basiclowerer_array_muxed10 = rowbuffermanager_row;
-				case (rowbuffermanager_bank_group)
+				basiclowerer_array_muxed10 = row;
+				case (bank_group)
 					1'd0: begin
 						basiclowerer_array_muxed11 = basiclowerer_array_muxed10;
-						case (rowbuffermanager_bank)
+						case (bank)
 							1'd0: begin
 								rowbuffermanager16 <= basiclowerer_array_muxed11;
 							end
@@ -1199,7 +1201,7 @@ always @(posedge sys_clk) begin
 					end
 					1'd1: begin
 						basiclowerer_array_muxed12 = basiclowerer_array_muxed10;
-						case (rowbuffermanager_bank)
+						case (bank)
 							1'd0: begin
 								rowbuffermanager20 <= basiclowerer_array_muxed12;
 							end
@@ -1216,7 +1218,7 @@ always @(posedge sys_clk) begin
 					end
 					2'd2: begin
 						basiclowerer_array_muxed13 = basiclowerer_array_muxed10;
-						case (rowbuffermanager_bank)
+						case (bank)
 							1'd0: begin
 								rowbuffermanager24 <= basiclowerer_array_muxed13;
 							end
@@ -1233,7 +1235,7 @@ always @(posedge sys_clk) begin
 					end
 					default: begin
 						basiclowerer_array_muxed14 = basiclowerer_array_muxed10;
-						case (rowbuffermanager_bank)
+						case (bank)
 							1'd0: begin
 								rowbuffermanager28 <= basiclowerer_array_muxed14;
 							end

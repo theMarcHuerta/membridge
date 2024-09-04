@@ -1,12 +1,14 @@
 /* Machine-generated using Migen */
 module RefreshManager(
+	input refresh,
+	input [1:0] bank_group,
+	input [1:0] bank,
+	output reg refresh_needed,
+	output reg refresh_done,
 	input sys_clk,
 	input sys_rst
 );
 
-reg refresh = 1'd0;
-reg refresh_needed = 1'd0;
-reg refresh_done = 1'd0;
 reg [31:0] counter = 32'd0;
 reg refresh_in_progress = 1'd0;
 

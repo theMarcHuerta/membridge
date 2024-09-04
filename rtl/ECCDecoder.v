@@ -1,11 +1,10 @@
 /* Machine-generated using Migen */
 module ECCDecoder(
-
+	input [71:0] data_in,
+	output [63:0] data_out,
+	output error_detected
 );
 
-reg [71:0] data_in = 72'd0;
-wire [63:0] data_out;
-wire error_detected;
 wire [7:0] parity;
 
 // synthesis translate_off

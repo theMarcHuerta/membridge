@@ -1,11 +1,11 @@
 /* Machine-generated using Migen */
 module AccessArbitration(
+	input [3:0] requests,
+	output [3:0] grant,
 	input sys_clk,
 	input sys_rst
 );
 
-reg [3:0] requests = 4'd0;
-wire [3:0] grant0;
 wire [3:0] request;
 reg [1:0] grant1 = 2'd0;
 
@@ -15,7 +15,7 @@ initial dummy_s <= 1'd0;
 // synthesis translate_on
 
 assign request = requests;
-assign grant0 = grant1;
+assign grant = grant1;
 
 always @(posedge sys_clk) begin
 	case (grant1)

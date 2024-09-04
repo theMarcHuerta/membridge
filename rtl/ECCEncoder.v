@@ -1,10 +1,9 @@
 /* Machine-generated using Migen */
 module ECCEncoder(
-
+	input [63:0] data_in,
+	output [71:0] data_out
 );
 
-reg [63:0] data_in = 64'd0;
-wire [71:0] data_out;
 wire [7:0] parity;
 
 // synthesis translate_off
